@@ -121,52 +121,51 @@ function createWindow() {
 app.whenReady().then(() => {
     createWindow();
 
-    // Auto Updater
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    
+    // ── Auto Updater & Live GitHub Sync Engine ───────────────────
     async function checkForUpdatesDirect() {
-        // 1. Direct GitHub raw manifest check
         try {
-            const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 8000 });
-            const manifest = resp.data;
-            if (manifest && manifest.version && isNewerVersion(manifest.version, app.getVersion())) {
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('update-available', manifest.version);
-                }
-                return true;
-            }
-        } catch (_) {}
+            const local = await getLocalManifest();
+            const localCode = parseInt(local.versionCode || 100, 10);
+            const localVer  = local.version || app.getVersion();
 
-        // 2. GitHub Release check via electron-updater
-        try {
-            await autoUpdater.checkForUpdatesAndNotify();
+            const resp = await axios.get(`${GITHUB_CONFIG.rawManifestUrl}?t=${Date.now()}`, { 
+                timeout: 8000,
+                headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' }
+            });
+            const manifest = resp.data;
+            if (manifest && (manifest.version || manifest.versionCode)) {
+                const remoteCode = parseInt(manifest.versionCode || 0, 10);
+                const remoteVer  = manifest.version || '1.0.0';
+
+                const isNewer = (remoteCode > localCode) || isNewerVersion(remoteVer, localVer);
+                if (isNewer && mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('hot-update-available', {
+                        version: remoteVer,
+                        versionCode: remoteCode,
+                        title: manifest.changelog?.[0]?.title || `v${remoteVer}`,
+                        changes: manifest.changelog?.[0]?.changes || [],
+                        files: manifest.files || []
+                    });
+                    return true;
+                }
+            }
         } catch (_) {}
         return false;
     }
 
-    // Check 3 seconds after startup
-    setTimeout(checkForUpdatesDirect, 3000);
+    // Check 3.5 seconds after startup
+    setTimeout(checkForUpdatesDirect, 3500);
 
-    // Periodic update check every 30 minutes
+    // Periodic check every 30 minutes
     setInterval(checkForUpdatesDirect, 30 * 60 * 1000);
-
-    autoUpdater.on('update-available', (info) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-available', info.version);
-    });
-    autoUpdater.on('download-progress', (progress) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', Math.round(progress.percent));
-    });
-    autoUpdater.on('update-downloaded', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-downloaded');
-    });
 });
 
+// ── App Shutdown Handlers ───────────────────────────────────
 app.on('window-all-closed', () => {
-    if (serverProcess) {
-        try { serverProcess.stdin.write('stop\n'); } catch (_) {}
+    if (serverProcess || serverRunning) {
+        if (serverProcess) serverProcess.stdin.write('stop\n');
         setTimeout(() => {
-            try { serverProcess.kill(); } catch (_) {}
+            if (playitProcess) playitProcess.kill();
             app.quit();
         }, 3000);
     } else {
@@ -182,63 +181,167 @@ ipcMain.on('win-maximize', () => {
 });
 ipcMain.on('win-close', () => mainWindow && mainWindow.close());
 
-// ── Auto Updater ────────────────────────────────────────────
+// ── Helper to resolve local update-check.json ─────────────────
+async function getLocalManifest() {
+    try {
+        const localPath = path.join(__dirname, 'update-check.json');
+        if (fsSync.existsSync(localPath)) {
+            const content = await fs.readFile(localPath, 'utf-8');
+            return JSON.parse(content);
+        }
+    } catch (_) {}
+    return { version: app.getVersion(), versionCode: 100 };
+}
+
+function getAppBasePath() {
+    return app.isPackaged ? path.join(process.resourcesPath, 'app') : __dirname;
+}
+
+// ── Auto Updater & GitHub Hot-Patch IPC ───────────────────────
 ipcMain.handle('install-update', () => {
-    autoUpdater.quitAndInstall();
+    app.relaunch();
+    app.exit(0);
+});
+
+ipcMain.handle('relaunch-app', () => {
+    app.relaunch();
+    app.exit(0);
 });
 
 ipcMain.handle('check-for-updates-manual', async () => {
-    // 1. Direct manifest check from GitHub raw URL
     try {
-        const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 8000 });
-        const manifest = resp.data;
-        const currentVersion = app.getVersion();
-        if (manifest && manifest.version && isNewerVersion(manifest.version, currentVersion)) {
-            return {
-                updateAvailable: true,
-                version: manifest.version,
-                releaseDate: manifest.releaseDate || null,
-                downloadUrl: manifest.downloadUrl || GITHUB_CONFIG.releasesUrl
-            };
-        }
-    } catch (_) {}
+        const localManifest = await getLocalManifest();
+        const localCode = parseInt(localManifest.versionCode || 100, 10);
+        const localVer  = localManifest.version || app.getVersion();
 
-    // 2. electron-updater check
-    try {
-        const result = await autoUpdater.checkForUpdates();
-        if (result && result.updateInfo && isNewerVersion(result.updateInfo.version, app.getVersion())) {
+        // Query GitHub raw update-check.json with timestamp to bypass GitHub caching
+        const resp = await axios.get(`${GITHUB_CONFIG.rawManifestUrl}?t=${Date.now()}`, { 
+            timeout: 8000,
+            headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' }
+        });
+        const manifest = resp.data;
+
+        if (manifest && (manifest.version || manifest.versionCode)) {
+            const remoteCode = parseInt(manifest.versionCode || 0, 10);
+            const remoteVer  = manifest.version || '1.0.0';
+
+            const isNewer = (remoteCode > localCode) || isNewerVersion(remoteVer, localVer);
+
+            if (isNewer) {
+                return {
+                    updateAvailable: true,
+                    version: remoteVer,
+                    versionCode: remoteCode,
+                    currentVersion: localVer,
+                    currentVersionCode: localCode,
+                    releaseDate: manifest.releaseDate || 'Recent',
+                    title: manifest.changelog?.[0]?.title || `v${remoteVer} Update`,
+                    changes: manifest.changelog?.[0]?.changes || ['Latest bug fixes & performance enhancements.'],
+                    files: manifest.files || [
+                        'src/index.html',
+                        'src/style.css',
+                        'src/renderer.js',
+                        'main.js',
+                        'preload.js',
+                        'update-check.json'
+                    ],
+                    downloadUrl: manifest.downloadUrl || GITHUB_CONFIG.releasesUrl
+                };
+            }
+
+            // Up to date! (Eliminates the 404 error completely)
             return {
-                updateAvailable: true,
-                version: result.updateInfo.version,
-                releaseDate: result.updateInfo.releaseDate || null,
-                downloadUrl: GITHUB_CONFIG.releasesUrl
+                updateAvailable: false,
+                version: localVer,
+                versionCode: localCode,
+                message: `You're up to date! Jtg-Craft v${localVer} (Build #${localCode}) is running.`
             };
         }
-        return { updateAvailable: false, version: app.getVersion() };
     } catch (e) {
-        return { updateAvailable: false, version: app.getVersion(), error: e.message };
+        console.warn('GitHub update check failed:', e.message);
+        return {
+            updateAvailable: false,
+            version: app.getVersion(),
+            error: `Unable to connect to GitHub (${e.message}). Check internet connection.`
+        };
     }
+
+    return {
+        updateAvailable: false,
+        version: app.getVersion(),
+        message: `You're up to date! Jtg-Craft v${app.getVersion()} is the latest version.`
+    };
 });
 
-ipcMain.handle('get-app-version', () => {
-    return app.getVersion();
+ipcMain.handle('apply-github-hot-update', async () => {
+    // 1. Fetch remote manifest with cache-busting
+    const manifestResp = await axios.get(`${GITHUB_CONFIG.rawManifestUrl}?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' },
+        timeout: 10000
+    });
+    const manifest = manifestResp.data;
+    if (!manifest) throw new Error('Could not retrieve update manifest from GitHub repository.');
+
+    const filesToUpdate = manifest.files && Array.isArray(manifest.files) && manifest.files.length > 0
+        ? manifest.files
+        : ['src/index.html', 'src/style.css', 'src/renderer.js', 'main.js', 'preload.js', 'update-check.json'];
+
+    const baseDir = getAppBasePath();
+    const total = filesToUpdate.length;
+    let completed = 0;
+
+    for (let i = 0; i < filesToUpdate.length; i++) {
+        const relFile = filesToUpdate[i].replace(/^\//, '');
+        const targetPath = path.join(baseDir, relFile);
+        const fileUrl = `https://raw.githubusercontent.com/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${GITHUB_CONFIG.branch}/${relFile}?t=${Date.now()}`;
+
+        try {
+            const fileResp = await axios.get(fileUrl, {
+                responseType: 'arraybuffer',
+                timeout: 15000,
+                headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' }
+            });
+
+            await fs.mkdir(path.dirname(targetPath), { recursive: true });
+            await fs.writeFile(targetPath, Buffer.from(fileResp.data));
+
+            completed++;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                const pct = Math.round((completed / total) * 100);
+                mainWindow.webContents.send('hot-update-progress', {
+                    current: completed,
+                    total,
+                    file: relFile,
+                    pct
+                });
+            }
+        } catch (downloadErr) {
+            console.error(`Failed to download update file ${relFile}:`, downloadErr.message);
+            throw new Error(`Failed to update ${relFile}: ${downloadErr.message}`);
+        }
+    }
+
+    return {
+        success: true,
+        version: manifest.version,
+        versionCode: manifest.versionCode
+    };
+});
+
+ipcMain.handle('get-app-version', async () => {
+    const local = await getLocalManifest();
+    return local.version || app.getVersion();
 });
 
 ipcMain.handle('get-update-changelog', async () => {
     try {
-        // Fetch update-check.json from GitHub raw content
-        const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 10000 });
+        const resp = await axios.get(`${GITHUB_CONFIG.rawManifestUrl}?t=${Date.now()}`, { 
+            timeout: 8000,
+            headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' }
+        });
         return resp.data;
     } catch (e) {
-        // Fallback: read local update-check.json
-        try {
-            const localPath = path.join(__dirname, 'update-check.json');
-            if (fsSync.existsSync(localPath)) {
-                const content = await fs.readFile(localPath, 'utf-8');
-                return JSON.parse(content);
-            }
-        } catch (_) {}
-        return null;
+        return await getLocalManifest();
     }
 });
 

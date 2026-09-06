@@ -85,6 +85,10 @@ contextBridge.exposeInMainWorld('api', {
     checkForUpdatesManual: () => ipcRenderer.invoke('check-for-updates-manual'),
     getUpdateChangelog:    () => ipcRenderer.invoke('get-update-changelog'),
     getAppVersion:         () => ipcRenderer.invoke('get-app-version'),
+    applyGithubHotUpdate:  () => ipcRenderer.invoke('apply-github-hot-update'),
+    relaunchApp:           () => ipcRenderer.invoke('relaunch-app'),
+    onHotUpdateProgress:   (cb) => ipcRenderer.on('hot-update-progress', (_, d) => cb(d)),
+    onHotUpdateAvailable:  (cb) => ipcRenderer.on('hot-update-available', (_, d) => cb(d)),
 
     // ── Events (main → renderer) ──────────────
     onDownloadProgress: (cb) => ipcRenderer.on('download-progress', (_, d) => cb(d)),

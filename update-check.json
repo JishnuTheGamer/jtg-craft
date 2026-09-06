@@ -3,6 +3,14 @@
   "versionCode": 100,
   "releaseDate": "2026-09-06",
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases",
+  "files": [
+    "src/index.html",
+    "src/style.css",
+    "src/renderer.js",
+    "main.js",
+    "preload.js",
+    "update-check.json"
+  ],
   "changelog": [
     {
       "version": "1.0.0",
@@ -11,16 +19,17 @@
       "type": "major",
       "title": "Initial Release v1.0.0",
       "changes": [
-        "One-click Minecraft Plugin Manager (Modrinth store & curated offline catalog)",
+        "Live Modrinth Plugin Manager with real-time search & 25+ curated catalog",
+        "Multi-Platform Server JAR resolver (Auto Paper/Spigot detection)",
         "Direct installation for ViaVersion, ViaBackwards, LuckPerms, EssentialsX, Geyser, etc.",
-        "Plugin Manager UI with enable/disable switch, delete, and custom .jar upload",
         "Support for Minecraft 26.2 (Chaos Cubed) & 26.1 (Tiny Takeover)",
-        "Multi-Version Java Manager (Java 25, 21, 17) with auto-detection & Settings panel",
+        "Multi-Version Java Manager (Java 25, 21, 17) with auto-detection & manual override",
+        "Direct GitHub Hot-Update engine (sync latest code on relaunch without redownloading .exe)",
         "Automated Minecraft Paper server creation and live interactive console",
         "Advanced File Manager with protected .jar viewer and in-app file editor",
         "World Manager with zip import/export, Player Manager, and Server Properties editor",
         "Automated backup system (full server or worlds only)",
-        "Dual-layer auto-update system with GitHub Releases & update manifest",
+        "Playit Tunnel Beta integration UI",
         "Premium dark glassmorphism theme with smooth micro-animations"
       ]
     }

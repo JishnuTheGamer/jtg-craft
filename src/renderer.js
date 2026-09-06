@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         panel.classList.add('active');
         const nav = $(`.nav-item[data-panel="${id}"]`);
         if (nav) nav.classList.add('active');
+        if (id === 'panel-settings') {
+            loadChangelog();
+        }
     }
 
     function formatSize(bytes) {
@@ -1234,59 +1237,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  UPDATE SYSTEM & CHANGELOG
+    //  UPDATE SYSTEM, GITHUB HOT-PATCH & CHANGELOG
     // ══════════════════════════════════════════════════════════
+    let activeUpdateInfo = null;
+
     async function loadChangelog() {
         const display = $('#update-changelog-display');
-        if (!display) return;
+        const lblVersion = $('#lbl-installed-version');
 
         try {
+            const currentAppVer = await window.api.getAppVersion();
             const data = await window.api.getUpdateChangelog();
-            if (data && data.changelog && data.changelog.length > 0) {
+            const versionCode = (data && data.versionCode) ? data.versionCode : 100;
+            if (lblVersion) {
+                lblVersion.textContent = `v${currentAppVer} (Build #${versionCode})`;
+            }
+
+            if (display && data && data.changelog && data.changelog.length > 0) {
                 const latest = data.changelog[0];
                 let html = `<div style="margin-top: 4px;">`;
-                html += `<span style="font-size: 12px; color: var(--text-1); font-weight: 600;">${latest.title}</span>`;
+                html += `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">`;
+                html += `<span style="font-size: 13px; color: var(--text-1); font-weight: 600;">${latest.title}</span>`;
                 html += `<span class="changelog-version-tag">v${latest.version}</span>`;
-                html += `<ul class="changelog-list">`;
-                const maxItems = Math.min(latest.changes.length, 4);
+                html += `</div><ul class="changelog-list">`;
+                const maxItems = Math.min(latest.changes.length, 5);
                 for (let i = 0; i < maxItems; i++) {
                     html += `<li>${latest.changes[i]}</li>`;
                 }
-                if (latest.changes.length > 4) {
-                    html += `<li style="color: var(--text-3);">+${latest.changes.length - 4} more...</li>`;
+                if (latest.changes.length > 5) {
+                    html += `<li style="color: var(--text-3);">+${latest.changes.length - 5} more updates...</li>`;
                 }
                 html += `</ul></div>`;
                 display.innerHTML = html;
             }
-        } catch (e) {
-            // Silent fail — changelog is optional
-        }
+        } catch (_) {}
     }
+
+    // Call once on startup
+    loadChangelog();
 
     // Manual update check button
     const btnCheckUpdates = $('#btn-check-updates');
+    const btnDownloadUpdate = $('#btn-download-update');
+    const btnRelaunchUpdate = $('#btn-relaunch-update');
+    const statusEl = $('#update-check-status');
+    const badgePill = $('#update-badge-pill');
+    const progressBox = $('#hot-update-progress-container');
+    const barProgress = $('#hot-update-bar');
+    const lblPct = $('#hot-update-pct-label');
+    const lblFile = $('#hot-update-file-label');
+
     if (btnCheckUpdates) {
         btnCheckUpdates.onclick = async () => {
-            const statusEl = $('#update-check-status');
             btnCheckUpdates.disabled = true;
-            statusEl.textContent = 'Checking for updates...';
+            statusEl.textContent = 'Analyzing GitHub repository for updates...';
             statusEl.style.color = 'var(--text-2)';
 
             try {
                 const result = await window.api.checkForUpdatesManual();
                 if (result.updateAvailable) {
-                    statusEl.textContent = `Update available: v${result.version}`;
+                    activeUpdateInfo = result;
+                    if (badgePill) {
+                        badgePill.className = 'badge-pill update-ready';
+                        badgePill.textContent = `● Update Available: v${result.version}`;
+                    }
+                    statusEl.textContent = `🚀 Update v${result.version} (Build #${result.versionCode}) is ready! Direct hot-patch available.`;
                     statusEl.style.color = 'var(--green-400)';
-                    toast(`Update available: v${result.version}! It will download automatically.`);
+                    
+                    if (btnDownloadUpdate) btnDownloadUpdate.classList.remove('hidden');
+                    if (btnRelaunchUpdate) btnRelaunchUpdate.classList.add('hidden');
+
+                    toast(`New version v${result.version} found! Click 'Download & Apply' to update.`);
                 } else if (result.error) {
-                    statusEl.textContent = `Check failed: ${result.error}`;
+                    statusEl.textContent = `Update check note: ${result.error}`;
                     statusEl.style.color = 'var(--yellow-500)';
                 } else {
-                    statusEl.textContent = `You're up to date! (v${result.version})`;
+                    if (badgePill) {
+                        badgePill.className = 'badge-pill up-to-date';
+                        badgePill.textContent = `● Up to Date`;
+                    }
+                    statusEl.textContent = result.message || `You're up to date! Jtg-Craft v${result.version} is running.`;
                     statusEl.style.color = 'var(--green-400)';
+                    if (btnDownloadUpdate) btnDownloadUpdate.classList.add('hidden');
+                    if (btnRelaunchUpdate) btnRelaunchUpdate.classList.add('hidden');
+                    toast('Your Jtg-Craft is running the latest version!');
                 }
             } catch (e) {
-                statusEl.textContent = 'Update check failed.';
+                statusEl.textContent = 'Could not complete update check. Please verify internet connection.';
                 statusEl.style.color = 'var(--red-500)';
             }
 
@@ -1294,29 +1331,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  UPDATER (sidebar notification)
-    // ══════════════════════════════════════════════════════════
-    if (window.api.onUpdateAvailable) {
-        window.api.onUpdateAvailable(version => {
-            $('#updater-ui').classList.remove('hidden');
-            $('#updater-status').textContent = `Downloading v${version}...`;
-            $('#updater-progress-track').style.display = 'block';
-            $('#btn-install-update').style.display = 'none';
-        });
+    // 1-Click Hot-Update Download Button (No .exe needed!)
+    if (btnDownloadUpdate) {
+        btnDownloadUpdate.onclick = async () => {
+            btnDownloadUpdate.disabled = true;
+            btnDownloadUpdate.innerHTML = '⏳ Downloading from GitHub...';
+            if (btnCheckUpdates) btnCheckUpdates.disabled = true;
+            if (progressBox) progressBox.classList.remove('hidden');
 
-        window.api.onUpdateProgress(pct => {
-            $('#updater-bar').style.width = pct + '%';
-        });
+            try {
+                const res = await window.api.applyGithubHotUpdate();
+                if (res && res.success) {
+                    statusEl.textContent = `✅ Successfully updated to v${res.version} (Build #${res.versionCode})! Relaunch to apply changes.`;
+                    statusEl.style.color = 'var(--green-400)';
+                    btnDownloadUpdate.classList.add('hidden');
+                    if (btnRelaunchUpdate) btnRelaunchUpdate.classList.remove('hidden');
+                    if (progressBox) progressBox.classList.add('hidden');
+                    toast('Update downloaded successfully! Relaunch now to apply changes.', 'success');
+                }
+            } catch (err) {
+                btnDownloadUpdate.disabled = false;
+                btnDownloadUpdate.innerHTML = '⚡ Download & Apply Update';
+                statusEl.textContent = `Failed to apply update: ${err.message}`;
+                statusEl.style.color = 'var(--red-500)';
+                toast(`Update failed: ${err.message}`, 'error');
+            }
 
-        window.api.onUpdateDownloaded(() => {
-            $('#updater-status').textContent = 'Update Ready to Install!';
-            $('#updater-progress-track').style.display = 'none';
-            $('#btn-install-update').style.display = 'block';
-        });
-
-        $('#btn-install-update').onclick = () => {
-            window.api.installUpdate();
+            if (btnCheckUpdates) btnCheckUpdates.disabled = false;
         };
+    }
+
+    // Relaunch app to apply changes
+    if (btnRelaunchUpdate) {
+        btnRelaunchUpdate.onclick = () => {
+            window.api.relaunchApp();
+        };
+    }
+
+    // Live Hot-Update Download Progress listener
+    if (window.api.onHotUpdateProgress) {
+        window.api.onHotUpdateProgress(({ current, total, file, pct }) => {
+            if (barProgress) barProgress.style.width = `${pct}%`;
+            if (lblPct) lblPct.textContent = `${pct}%`;
+            if (lblFile) lblFile.textContent = `Syncing ${file} (${current}/${total})...`;
+        });
+    }
+
+    // Startup background update detection
+    if (window.api.onHotUpdateAvailable) {
+        window.api.onHotUpdateAvailable((updateInfo) => {
+            activeUpdateInfo = updateInfo;
+            if (badgePill) {
+                badgePill.className = 'badge-pill update-ready';
+                badgePill.textContent = `● Update Available: v${updateInfo.version}`;
+            }
+            if (btnDownloadUpdate) btnDownloadUpdate.classList.remove('hidden');
+            if (statusEl) {
+                statusEl.textContent = `New update v${updateInfo.version} detected on GitHub! Click 'Download & Apply Update' to sync.`;
+                statusEl.style.color = 'var(--green-400)';
+            }
+            toast(`Jtg-Craft v${updateInfo.version} is available! Open Settings to update.`);
+        });
     }
 });

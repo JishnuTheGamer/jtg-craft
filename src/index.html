@@ -375,15 +375,55 @@
                     </div>
                 </div>
 
-                <!-- Check for Updates -->
-                <div class="settings-card update-settings-card">
+                <!-- Check for Updates & GitHub Sync Engine -->
+                <div class="settings-card update-settings-card hot-update-card">
                     <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div>
                     <div class="sc-content">
-                        <h3>App Updates</h3>
-                        <p>Check for the latest version of Jtg-Craft. Updates are checked automatically on startup.</p>
+                        <div class="update-card-top">
+                            <div>
+                                <h3>App Updates & GitHub Sync</h3>
+                                <p>Live auto-sync with the official GitHub repository. Updates apply on relaunch without redownloading the installer.</p>
+                            </div>
+                            <span id="update-badge-pill" class="badge-pill up-to-date">● Up to Date</span>
+                        </div>
+
+                        <!-- Info Grid -->
+                        <div class="update-info-grid">
+                            <div class="update-info-item">
+                                <span class="lbl">Installed Version</span>
+                                <span id="lbl-installed-version" class="val">v1.0.0 (Build #100)</span>
+                            </div>
+                            <div class="update-info-item">
+                                <span class="lbl">GitHub Source</span>
+                                <span class="val">JishnuTheGamer/jtg-craft (main)</span>
+                            </div>
+                            <div class="update-info-item">
+                                <span class="lbl">Update Channel</span>
+                                <span class="val text-accent">GitHub Hot-Patch (Live)</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar (hidden by default) -->
+                        <div id="hot-update-progress-container" class="hot-update-progress hidden">
+                            <div class="hot-update-progress-labels">
+                                <span id="hot-update-file-label">Downloading update files...</span>
+                                <span id="hot-update-pct-label">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div id="hot-update-bar" class="progress-fill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Changelog display -->
                         <div id="update-changelog-display" style="margin-bottom: 8px;"></div>
-                        <button id="btn-check-updates" class="btn secondary">Check for Updates</button>
-                        <span id="update-check-status" style="font-size: 12px; color: var(--text-3); margin-top: 6px; display: block;"></span>
+
+                        <!-- Actions -->
+                        <div class="update-card-actions">
+                            <button id="btn-check-updates" class="btn secondary">Check for Updates</button>
+                            <button id="btn-download-update" class="btn success hidden">⚡ Download & Apply Update</button>
+                            <button id="btn-relaunch-update" class="btn primary hidden">🚀 Relaunch Now</button>
+                        </div>
+                        <span id="update-check-status" class="update-status-msg"></span>
                     </div>
                 </div>
 
