@@ -9,6 +9,7 @@ const fsSync = require('fs');
 const fs     = require('fs').promises;
 const os     = require('os');
 const { spawn, exec, execFile } = require('child_process');
+const net      = require('net');
 const axios    = require('axios');
 const archiver = require('archiver');
 const { autoUpdater } = require('electron-updater');
@@ -161,16 +162,55 @@ app.whenReady().then(() => {
 });
 
 // ── App Shutdown Handlers ───────────────────────────────────
-app.on('window-all-closed', () => {
-    if (serverProcess || serverRunning) {
-        if (serverProcess) serverProcess.stdin.write('stop\n');
-        setTimeout(() => {
-            if (playitProcess) playitProcess.kill();
-            app.quit();
-        }, 3000);
-    } else {
+let isQuitting = false;
+
+async function gracefulServerShutdown(timeoutMs = 4000) {
+    if (!serverProcess && !serverRunning) return;
+    try {
+        if (serverProcess && serverProcess.stdin && serverProcess.stdin.writable) {
+            serverProcess.stdin.write('stop\n');
+        }
+    } catch (_) {}
+
+    if (serverProcess) {
+        const exitPromise = new Promise(res => {
+            if (!serverProcess) return res();
+            serverProcess.once('close', () => res());
+            serverProcess.once('exit', () => res());
+        });
+        const timeoutPromise = new Promise(res => setTimeout(res, timeoutMs));
+        await Promise.race([exitPromise, timeoutPromise]);
+
+        if (serverProcess && serverProcess.pid) {
+            try {
+                exec(`taskkill /F /T /PID ${serverProcess.pid}`, () => {});
+            } catch (_) {}
+            serverProcess = null;
+            serverRunning = false;
+        }
+    }
+
+    if (playitProcess) {
+        try { playitProcess.kill(); } catch (_) {}
+        playitProcess = null;
+    }
+}
+
+app.on('before-quit', async (e) => {
+    if ((serverProcess || serverRunning) && !isQuitting) {
+        e.preventDefault();
+        isQuitting = true;
+        await gracefulServerShutdown(4000);
         app.quit();
     }
+});
+
+app.on('window-all-closed', async () => {
+    if ((serverProcess || serverRunning) && !isQuitting) {
+        isQuitting = true;
+        await gracefulServerShutdown(4000);
+    }
+    app.quit();
 });
 
 // ── Title-bar controls ──────────────────────────────────────
@@ -648,12 +688,53 @@ ipcMain.handle('check-disk-space', async (_, dirPath) => {
     } catch { return { ok: true }; }
 });
 
-ipcMain.handle('check-port', async (_, port) => {
+// ── Port check helpers ──────────────────────────────────────
+function checkPortInUse(port) {
     return new Promise(resolve => {
-        exec(`netstat -ano | findstr :${port}`, (err, stdout) => {
-            resolve({ inUse: !err && stdout.trim().length > 0 });
+        const server = net.createServer()
+            .once('error', err => {
+                if (err.code === 'EADDRINUSE') resolve(true);
+                else resolve(false);
+            })
+            .once('listening', () => {
+                server.once('close', () => resolve(false)).close();
+            })
+            .listen(port, '0.0.0.0');
+    });
+}
+
+function findProcessOnPort(port) {
+    return new Promise(resolve => {
+        exec('netstat -ano -p tcp', (err, stdout) => {
+            if (err || !stdout) return resolve(null);
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                if (line.includes('LISTENING') && (line.includes(`:${port} `) || line.includes(`:${port}\t`))) {
+                    const parts = line.trim().split(/\s+/);
+                    const pid = parseInt(parts[parts.length - 1], 10);
+                    if (pid && !isNaN(pid)) return resolve(pid);
+                }
+            }
+            resolve(null);
         });
     });
+}
+
+function isJavaProcess(pid) {
+    return new Promise(resolve => {
+        exec(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, (err, stdout) => {
+            if (err || !stdout) return resolve(false);
+            const lower = stdout.toLowerCase();
+            resolve(lower.includes('java.exe') || lower.includes('javaw.exe'));
+        });
+    });
+}
+
+ipcMain.handle('check-port', async (_, port) => {
+    let p = parseInt(port, 10);
+    if (!p || p <= 0 || p > 65535) return { inUse: false };
+    const inUse = await checkPortInUse(p);
+    return { inUse };
 });
 
 // ── Directory picker ────────────────────────────────────────
@@ -981,15 +1062,39 @@ ipcMain.handle('server-start', async () => {
     if (!fsSync.existsSync(metaPath)) throw new Error('Server metadata not found.');
     const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
 
-    // Port check
-    const propsContent = await fs.readFile(path.join(currentServerDir, 'server.properties'), 'utf-8').catch(() => '');
-    const portMatch = propsContent.match(/server-port=(\d+)/);
-    const port = portMatch ? portMatch[1] : '25565';
-    const portCheck = await new Promise(resolve => {
-        exec(`netstat -ano | findstr :${port} | findstr LISTENING`, (err, stdout) => {
-            resolve(!err && stdout.trim().length > 0);
-        });
-    });
+    // Port check & auto-healing
+    const propsPath = path.join(currentServerDir, 'server.properties');
+    let propsContent = await fs.readFile(propsPath, 'utf-8').catch(() => '');
+    const hasServerPort = /(?:^|[\r\n])\s*server-port\s*=\s*(\d+)/.test(propsContent);
+    const portMatch = propsContent.match(/(?:^|[\r\n])\s*server-port\s*=\s*(\d+)/);
+    let port = portMatch ? parseInt(portMatch[1], 10) : 25565;
+
+    // Safety guard: Minecraft server port must never be 0 or out of range
+    if (!hasServerPort || !port || port <= 0 || port > 65535) {
+        port = 25565;
+        // Auto-heal server.properties if server-port was corrupted to 0 or missing
+        if (hasServerPort) {
+            propsContent = propsContent.replace(/(?:^|[\r\n])\s*server-port\s*=\s*\d+/g, '\nserver-port=25565');
+        } else {
+            propsContent += '\nserver-port=25565\n';
+        }
+        await fs.writeFile(propsPath, propsContent, 'utf-8').catch(() => {});
+    }
+
+    let portCheck = await checkPortInUse(port);
+    if (portCheck) {
+        // Check if an orphaned Java process from a previous run is holding the port
+        const orphanPid = await findProcessOnPort(port);
+        if (orphanPid) {
+            const isJava = await isJavaProcess(orphanPid);
+            if (isJava) {
+                mainWindow.webContents.send('console-data', `[Jtg-craft] Port ${port} is occupied by an orphaned Java process (PID ${orphanPid}). Terminating orphaned process...\n`);
+                await new Promise(r => exec(`taskkill /F /T /PID ${orphanPid}`, () => r()));
+                await new Promise(r => setTimeout(r, 600));
+                portCheck = await checkPortInUse(port);
+            }
+        }
+    }
     if (portCheck) throw new Error(`Port ${port} is already in use.`);
 
     // Determine Java executable based on server config & Minecraft version
@@ -1061,9 +1166,17 @@ ipcMain.handle('server-stop', () => {
 
 ipcMain.handle('server-kill', () => {
     if (!serverProcess) return;
-    try { serverProcess.kill('SIGTERM'); } catch (_) {}
+    try {
+        if (serverProcess.pid) {
+            exec(`taskkill /F /T /PID ${serverProcess.pid}`, () => {});
+        } else {
+            serverProcess.kill();
+        }
+    } catch (_) {}
+    serverProcess = null;
+    serverRunning = false;
     if (playitProcess) {
-        try { playitProcess.kill('SIGKILL'); } catch (e) {}
+        try { playitProcess.kill(); } catch (e) {}
         playitProcess = null;
     }
 });
@@ -1268,7 +1381,10 @@ ipcMain.handle('players-remove', async (_, listName, playerName) => {
 
 // ── Server Properties ───────────────────────────────────────
 ipcMain.handle('props-get', async () => {
-    const content = await fs.readFile(path.join(currentServerDir, 'server.properties'), 'utf-8');
+    if (!currentServerDir) return {};
+    const propsPath = path.join(currentServerDir, 'server.properties');
+    if (!fsSync.existsSync(propsPath)) return {};
+    const content = await fs.readFile(propsPath, 'utf-8');
     const lines = content.split('\n');
     const props = {};
     for (const line of lines) {
@@ -1278,10 +1394,29 @@ ipcMain.handle('props-get', async () => {
         if (idx === -1) continue;
         props[trimmed.substring(0, idx)] = trimmed.substring(idx + 1);
     }
+    // Safety: ensure server-port is always valid and never 0
+    if (props['server-port'] !== undefined) {
+        const p = parseInt(props['server-port'], 10);
+        if (!p || p <= 0 || p > 65535) {
+            props['server-port'] = '25565';
+        }
+    }
     return props;
 });
 
 ipcMain.handle('props-save', async (_, propsObj) => {
+    if (!currentServerDir || !propsObj || typeof propsObj !== 'object') return;
+
+    // Safety: ensure server-port is never saved as 0 or out of range
+    if (propsObj['server-port'] !== undefined) {
+        const p = parseInt(propsObj['server-port'], 10);
+        if (!p || p <= 0 || p > 65535) {
+            propsObj['server-port'] = '25565';
+        } else {
+            propsObj['server-port'] = String(p);
+        }
+    }
+
     let content = '#Minecraft server properties\n#Generated by Jtg-craft\n';
     for (const [k, v] of Object.entries(propsObj)) {
         content += `${k}=${v}\n`;

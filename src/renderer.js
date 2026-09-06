@@ -847,6 +847,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const inputs = $$('.prop-input');
         const obj = {};
         inputs.forEach(el => { obj[el.dataset.key] = el.value; });
+        if (obj['server-port']) {
+            const p = parseInt(obj['server-port'], 10);
+            if (!p || p <= 0 || p > 65535) {
+                toast('Invalid server port. Resetting to 25565.', 'warning');
+                obj['server-port'] = '25565';
+                const portInput = $(`input[data-key="server-port"]`);
+                if (portInput) portInput.value = '25565';
+            }
+        }
         try {
             await window.api.propsSave(obj);
             toast('Properties saved! Restart server to apply.');
