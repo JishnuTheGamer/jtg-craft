@@ -1348,6 +1348,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (lblVersion) {
                 lblVersion.textContent = `v${currentAppVer} (Build #${versionCode})`;
             }
+            const sidebarVer = document.querySelector('.sidebar-version span:not(.dot)');
+            if (sidebarVer) {
+                sidebarVer.textContent = `v${currentAppVer}`;
+            }
 
             if (display && data && data.changelog && data.changelog.length > 0) {
                 const latest = data.changelog[0];

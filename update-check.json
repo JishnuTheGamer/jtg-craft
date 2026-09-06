@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "versionCode": 101,
+  "version": "1.0.2",
+  "versionCode": 102,
   "releaseDate": "2026-09-06",
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases",
   "files": [
@@ -12,6 +12,21 @@
     "update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.2",
+      "versionCode": 102,
+      "date": "2026-09-06",
+      "type": "patch",
+      "title": "Server Port Fix, File Upload & Archive Extraction v1.0.2",
+      "changes": [
+        "Fixed 'Port 0 is already in use' error with smart regex matching and auto-healing server.properties",
+        "Orphan Java process detection and automated cleanup to prevent port locks",
+        "Fixed File Manager upload TypeError on drag-and-drop using Electron webUtils",
+        "Added native 1-click in-app archive extraction for .zip, .rar, .tar.gz, and .7z archives",
+        "Added server port validation in Properties editor to prevent invalid configurations",
+        "Added graceful shutdown handler preventing world and property corruption"
+      ]
+    },
     {
       "version": "1.0.1",
       "versionCode": 101,
