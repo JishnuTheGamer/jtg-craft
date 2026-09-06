@@ -1036,8 +1036,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else if (p.downloads >= 1000) dlsFormatted = (p.downloads / 1000).toFixed(1) + 'K';
                 else dlsFormatted = String(p.downloads || 0);
 
-                const iconHtml = p.iconUrl
-                    ? `<img class="plugin-card-icon" src="${p.iconUrl}" onerror="this.outerHTML='<div class=\\'plugin-card-icon\\'>🧩</div>'">`
+                const iconSrc = p.icon_url || p.iconUrl;
+                const iconHtml = iconSrc
+                    ? `<img class="plugin-card-icon" src="${iconSrc}" onerror="this.outerHTML='<div class=\\'plugin-card-icon\\'>🧩</div>'">`
                     : `<div class="plugin-card-icon">🧩</div>`;
 
                 const isInstalled = p.isInstalled;

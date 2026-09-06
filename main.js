@@ -1260,6 +1260,7 @@ ipcMain.handle('playit-remove', async () => {
 // ══════════════════════════════════════════════════════════
 
 // Curated top Minecraft plugins catalog for instant browsing & reliable fallback
+// Curated top Minecraft plugins catalog for instant browsing & reliable offline fallback
 const CURATED_PLUGINS = [
     {
         id: "viaversion",
@@ -1267,7 +1268,7 @@ const CURATED_PLUGINS = [
         title: "ViaVersion",
         author: "FlorianMichael",
         description: "Allows newer Minecraft client versions to connect to older server versions seamlessly.",
-        icon_url: "https://cdn.modrinth.com/data/lhGA9TYQ/icon.png",
+        icon_url: "https://cdn.modrinth.com/data/P1OZGk5p/ad14260a7308dc9e4c3385f3f6b5bdabfe17f295_96.webp",
         downloads: 12500000,
         categories: ["utility", "management"],
         directDownload: "https://github.com/ViaVersion/ViaVersion/releases/latest/download/ViaVersion.jar",
@@ -1279,11 +1280,23 @@ const CURATED_PLUGINS = [
         title: "ViaBackwards",
         author: "FlorianMichael",
         description: "Allows older Minecraft client versions to connect to newer server versions.",
-        icon_url: "https://cdn.modrinth.com/data/a980O9Uq/icon.png",
+        icon_url: "https://cdn.modrinth.com/data/spvEWuz4/c30ec7bf771be79b7692b1b427771765c9288e15_96.webp",
         downloads: 8900000,
         categories: ["utility", "management"],
         directDownload: "https://github.com/ViaVersion/ViaBackwards/releases/latest/download/ViaBackwards.jar",
         defaultFileName: "ViaBackwards.jar"
+    },
+    {
+        id: "viarewind",
+        slug: "viarewind",
+        title: "ViaRewind",
+        author: "ViaVersion",
+        description: "ViaVersion addon enabling 1.8.x and 1.7.x clients to connect to newer server versions.",
+        icon_url: "https://cdn.modrinth.com/data/TbHIxhx5/f59ffe031387b06a9b1efa736dbbb4db44284574_96.webp",
+        downloads: 620000,
+        categories: ["utility", "management"],
+        directDownload: "https://github.com/ViaVersion/ViaRewind/releases/latest/download/ViaRewind.jar",
+        defaultFileName: "ViaRewind.jar"
     },
     {
         id: "luckperms",
@@ -1294,7 +1307,6 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/Vebnzrzj/icon.png",
         downloads: 11200000,
         categories: ["administration", "security"],
-        directDownload: "https://download.luckperms.net/1556/bukkit/loader/LuckPerms-Bukkit-5.4.143.jar",
         defaultFileName: "LuckPerms.jar"
     },
     {
@@ -1315,7 +1327,7 @@ const CURATED_PLUGINS = [
         title: "Geyser",
         author: "GeyserMC",
         description: "A bridge/proxy enabling Minecraft Bedrock Edition players to join your Java Edition server.",
-        icon_url: "https://cdn.modrinth.com/data/w0itxDTh/icon.png",
+        icon_url: "https://cdn.modrinth.com/data/wKkoqHrH/icon.png",
         downloads: 7800000,
         categories: ["utility", "network"],
         directDownload: "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot",
@@ -1345,6 +1357,17 @@ const CURATED_PLUGINS = [
         defaultFileName: "worldedit-bukkit.jar"
     },
     {
+        id: "worldguard",
+        slug: "worldguard",
+        title: "WorldGuard",
+        author: "EngineHub",
+        description: "Protect regions, prevent fires, disable creeper damage, and manage land ownership flags.",
+        icon_url: "https://cdn.modrinth.com/data/np5eeBdh/icon.png",
+        downloads: 9200000,
+        categories: ["security", "world"],
+        defaultFileName: "WorldGuard.jar"
+    },
+    {
         id: "vault",
         slug: "vault",
         title: "Vault",
@@ -1353,6 +1376,7 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/YYXW3k6s/icon.png",
         downloads: 13900000,
         categories: ["utility", "economy"],
+        directDownload: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar",
         defaultFileName: "Vault.jar"
     },
     {
@@ -1431,87 +1455,113 @@ const CURATED_PLUGINS = [
         downloads: 8100000,
         categories: ["world", "management"],
         defaultFileName: "Multiverse-Core.jar"
+    },
+    {
+        id: "tab-was-taken",
+        slug: "tab-was-taken",
+        title: "TAB",
+        author: "NEZNAMY",
+        description: "An outstanding custom tablist, nametag, bossbar, and scoreboard formatting plugin.",
+        icon_url: "https://cdn.modrinth.com/data/bW5OtiuG/icon.png",
+        downloads: 4500000,
+        categories: ["utility", "decorative"],
+        defaultFileName: "TAB.jar"
+    },
+    {
+        id: "grimac",
+        slug: "grimac",
+        title: "Grim Anticheat",
+        author: "GrimAC",
+        description: "Modern 1.8-1.21+ deterministic, zero-false-positive packet-level anticheat for Paper.",
+        icon_url: "https://cdn.modrinth.com/data/F620n2g1/icon.png",
+        downloads: 1800000,
+        categories: ["security", "administration"],
+        defaultFileName: "GrimAC.jar"
+    },
+    {
+        id: "simple-voice-chat",
+        slug: "simple-voice-chat",
+        title: "Simple Voice Chat",
+        author: "henkelmax",
+        description: "Proximity voice chat in Minecraft! Hear players speak based on their distance and position.",
+        icon_url: "https://cdn.modrinth.com/data/9eGKhmgb/icon.png",
+        downloads: 66900000,
+        categories: ["social", "utility"],
+        defaultFileName: "voicechat-bukkit.jar"
+    },
+    {
+        id: "fastasyncworldedit",
+        slug: "fastasyncworldedit",
+        title: "FastAsyncWorldEdit (FAWE)",
+        author: "IntellectualSites",
+        description: "Blazingly fast, asynchronous WorldEdit implementation optimized to prevent server lag.",
+        icon_url: "https://cdn.modrinth.com/data/u55v77aN/icon.png",
+        downloads: 3200000,
+        categories: ["world", "optimization"],
+        defaultFileName: "FastAsyncWorldEdit.jar"
+    },
+    {
+        id: "gsit",
+        slug: "gsit",
+        title: "GSit",
+        author: "Gecolay",
+        description: "Allows players to sit on stairs/slabs, crawl anywhere, lay down, and emote smoothly.",
+        icon_url: "https://cdn.modrinth.com/data/2mhnWp7Q/icon.png",
+        downloads: 2400000,
+        categories: ["utility", "fun"],
+        defaultFileName: "GSit.jar"
+    },
+    {
+        id: "griefprevention",
+        slug: "griefprevention",
+        title: "GriefPrevention",
+        author: "RoboMWM",
+        description: "Self-service land claims with a golden shovel. Zero-admin grief prevention for survival servers.",
+        icon_url: "https://cdn.modrinth.com/data/xZl9Kq1b/icon.png",
+        downloads: 4100000,
+        categories: ["security", "world"],
+        defaultFileName: "GriefPrevention.jar"
+    },
+    {
+        id: "farmcontrol",
+        slug: "farmcontrol",
+        title: "FarmControl",
+        author: "froobynooby",
+        description: "Drastically reduce lag from massive mob farms and breeding without breaking mechanics.",
+        icon_url: "https://cdn.modrinth.com/data/fALzjamp/icon.png",
+        downloads: 1200000,
+        categories: ["optimization"],
+        defaultFileName: "FarmControl.jar"
+    },
+    {
+        id: "deluxemenus",
+        slug: "deluxemenus",
+        title: "DeluxeMenus",
+        author: "clip",
+        description: "Create stunning customizable GUI menus, server selectors, shops, and kits with ease.",
+        icon_url: "https://cdn.modrinth.com/data/x4n924k8/icon.png",
+        downloads: 3700000,
+        categories: ["utility", "economy"],
+        defaultFileName: "DeluxeMenus.jar"
     }
 ];
 
 // Helper to get list of installed plugin file base names
-async function getInstalledPluginNames() {
-    if (!currentServerDir) return new Set();
+async function getInstalledPluginFiles() {
+    if (!currentServerDir) return [];
     const pluginsDir = path.join(currentServerDir, 'plugins');
-    if (!fsSync.existsSync(pluginsDir)) return new Set();
+    if (!fsSync.existsSync(pluginsDir)) return [];
     try {
         const files = await fs.readdir(pluginsDir);
-        const set = new Set();
-        files.forEach(f => {
-            const clean = f.toLowerCase().replace(/\.jar(\.disabled)?$/i, '').replace(/[-_v\d.]+$/, '');
-            set.add(clean);
-            set.add(f.toLowerCase());
-        });
-        return set;
+        return files.filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled'));
     } catch (_) {
-        return new Set();
+        return [];
     }
 }
 
-ipcMain.handle('plugin-search', async (_, query, category) => {
-    const installedSet = await getInstalledPluginNames();
-    const markInstalled = (item) => {
-        const nameLower = (item.slug || item.title || '').toLowerCase();
-        let isInstalled = false;
-        for (const inst of installedSet) {
-            if (inst.includes(nameLower) || nameLower.includes(inst)) {
-                isInstalled = true;
-                break;
-            }
-        }
-        return { ...item, isInstalled };
-    };
-
-    if (!query || query.trim() === '') {
-        let list = CURATED_PLUGINS;
-        if (category && category !== 'all') {
-            list = list.filter(p => p.categories && p.categories.includes(category));
-        }
-        return list.map(markInstalled);
-    }
-
-    try {
-        // Query Modrinth v2 API
-        const encoded = encodeURIComponent(query.trim());
-        let url = `https://api.modrinth.com/v2/search?query=${encoded}&facets=[["project_type:plugin"]]&limit=30`;
-        const resp = await axios.get(url, {
-            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
-            timeout: 10000
-        });
-
-        if (resp.data && Array.isArray(resp.data.hits)) {
-            const results = resp.data.hits.map(hit => ({
-                id: hit.project_id,
-                slug: hit.slug,
-                title: hit.title,
-                description: hit.description,
-                author: hit.author,
-                icon_url: hit.icon_url || '',
-                downloads: hit.downloads || 0,
-                categories: hit.categories || []
-            }));
-            return results.map(markInstalled);
-        }
-    } catch (apiErr) {
-        console.warn('Modrinth search failed, falling back to curated list:', apiErr.message);
-    }
-
-    // Fallback search over curated list
-    const q = query.toLowerCase();
-    return CURATED_PLUGINS.filter(p => 
-        p.title.toLowerCase().includes(q) || 
-        p.description.toLowerCase().includes(q) ||
-        p.author.toLowerCase().includes(q)
-    ).map(markInstalled);
-});
-
-ipcMain.handle('plugin-get-version', async (_, projectIdOrSlug) => {
-    // Check if curated has direct download
+// Helper to resolve the best downloadable server (.jar) file for a plugin
+async function resolvePluginDownload(projectIdOrSlug) {
+    // 1. Check curated list for direct download URL
     const curated = CURATED_PLUGINS.find(p => p.slug === projectIdOrSlug || p.id === projectIdOrSlug);
     if (curated && curated.directDownload) {
         return {
@@ -1521,42 +1571,168 @@ ipcMain.handle('plugin-get-version', async (_, projectIdOrSlug) => {
         };
     }
 
+    // 2. Query Modrinth versions filtered for server platforms (Paper, Spigot, Bukkit, Purpur, Folia)
+    const serverLoadersParam = encodeURIComponent(JSON.stringify(['paper', 'spigot', 'bukkit', 'purpur', 'folia']));
+    const filterUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version?loaders=${serverLoadersParam}`;
+
+    let versionList = [];
     try {
-        const url = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
-        const resp = await axios.get(url, {
+        const resp = await axios.get(filterUrl, {
             headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
             timeout: 10000
         });
-
         if (Array.isArray(resp.data) && resp.data.length > 0) {
-            // Find newest version that has a .jar file
-            for (const ver of resp.data) {
-                if (Array.isArray(ver.files)) {
-                    const jarFile = ver.files.find(f => f.filename && f.filename.endsWith('.jar')) || ver.files[0];
-                    if (jarFile && jarFile.url) {
-                        return {
-                            downloadUrl: jarFile.url,
-                            fileName: jarFile.filename,
-                            versionNumber: ver.version_number,
-                            size: jarFile.size
-                        };
-                    }
-                }
-            }
+            versionList = resp.data;
         }
     } catch (e) {
-        console.error('Error fetching plugin version:', e.message);
+        console.warn('Filtered version fetch failed, trying unfiltered:', e.message);
     }
 
-    // Fallback: If curated exists without direct download
+    // If no filtered versions found, query unfiltered versions
+    if (versionList.length === 0) {
+        try {
+            const rawUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
+            const rawResp = await axios.get(rawUrl, {
+                headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
+                timeout: 10000
+            });
+            if (Array.isArray(rawResp.data)) {
+                versionList = rawResp.data;
+            }
+        } catch (e) {
+            console.error('Error fetching plugin versions:', e.message);
+        }
+    }
+
+    if (versionList.length > 0) {
+        // Iterate versions and select the best JAR file
+        for (const ver of versionList) {
+            if (!Array.isArray(ver.files) || ver.files.length === 0) continue;
+
+            const jarFiles = ver.files.filter(f => 
+                f.filename && 
+                f.filename.endsWith('.jar') && 
+                !f.filename.includes('-sources') && 
+                !f.filename.includes('-dev') && 
+                !f.filename.includes('-javadoc')
+            );
+
+            if (jarFiles.length === 0) continue;
+
+            // Prioritize files with paper, spigot, bukkit, or marked primary
+            const preferredJar = jarFiles.find(f => {
+                const lower = f.filename.toLowerCase();
+                return lower.includes('paper') || lower.includes('spigot') || lower.includes('bukkit') || lower.includes('purpur');
+            }) || jarFiles.find(f => f.primary) || jarFiles[0];
+
+            if (preferredJar && preferredJar.url) {
+                return {
+                    downloadUrl: preferredJar.url,
+                    fileName: preferredJar.filename,
+                    versionNumber: ver.version_number || 'latest',
+                    size: preferredJar.size
+                };
+            }
+        }
+    }
+
     if (curated) {
         return {
-            downloadUrl: `https://api.modrinth.com/v2/project/${curated.slug}/version`,
+            downloadUrl: curated.directDownload || `https://api.modrinth.com/v2/project/${curated.slug}/version`,
             fileName: curated.defaultFileName || `${curated.title}.jar`,
             versionNumber: 'latest'
         };
     }
-    throw new Error('Could not find a downloadable JAR for this plugin.');
+
+    throw new Error('Could not find a downloadable Paper/Spigot JAR file for this plugin on Modrinth.');
+}
+
+ipcMain.handle('plugin-search', async (_, query, category) => {
+    const installedFiles = await getInstalledPluginFiles();
+    const isInstalled = (item) => {
+        const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sNorm = norm(item.slug);
+        const tNorm = norm(item.title);
+        return installedFiles.some(f => {
+            const fNorm = norm(f.replace(/\.jar(\.disabled)?$/i, ''));
+            return (sNorm && (fNorm.includes(sNorm) || sNorm.includes(fNorm))) ||
+                   (tNorm && (fNorm.includes(tNorm) || tNorm.includes(fNorm)));
+        });
+    };
+
+    const hasQuery = query && query.trim().length > 0;
+    const cat = (category && category !== 'all') ? category : null;
+
+    try {
+        let url;
+        const facets = [['project_type:plugin']];
+        if (cat) {
+            facets.push([`categories:${cat}`]);
+        }
+        const encodedFacets = encodeURIComponent(JSON.stringify(facets));
+
+        if (hasQuery) {
+            const encodedQuery = encodeURIComponent(query.trim());
+            url = `https://api.modrinth.com/v2/search?query=${encodedQuery}&facets=${encodedFacets}&limit=40`;
+        } else {
+            url = `https://api.modrinth.com/v2/search?facets=${encodedFacets}&index=downloads&limit=40`;
+        }
+
+        const resp = await axios.get(url, {
+            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
+            timeout: 8000
+        });
+
+        if (resp.data && Array.isArray(resp.data.hits) && resp.data.hits.length > 0) {
+            const results = resp.data.hits.map(hit => ({
+                id: hit.project_id,
+                slug: hit.slug,
+                title: hit.title,
+                description: hit.description,
+                author: hit.author,
+                icon_url: hit.icon_url || '',
+                downloads: hit.downloads || 0,
+                categories: hit.categories || [],
+                isCurated: false
+            }));
+
+            // If empty query and category is all, blend in curated essentials at top
+            if (!hasQuery && !cat) {
+                const curatedMapped = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
+                const combined = [...curatedMapped];
+                for (const r of results) {
+                    if (!combined.some(c => c.slug === r.slug)) {
+                        combined.push(r);
+                    }
+                }
+                return combined.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+            }
+
+            return results.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+        }
+    } catch (apiErr) {
+        console.warn('Modrinth API live search failed, falling back to curated catalog:', apiErr.message);
+    }
+
+    // Fallback search over curated catalog
+    let fallbackList = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
+    if (cat) {
+        fallbackList = fallbackList.filter(p => p.categories && p.categories.includes(cat));
+    }
+    if (hasQuery) {
+        const q = query.toLowerCase();
+        fallbackList = fallbackList.filter(p => 
+            p.title.toLowerCase().includes(q) || 
+            p.description.toLowerCase().includes(q) ||
+            (p.author && p.author.toLowerCase().includes(q)) ||
+            (p.slug && p.slug.toLowerCase().includes(q))
+        );
+    }
+    return fallbackList.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+});
+
+ipcMain.handle('plugin-get-version', async (_, projectIdOrSlug) => {
+    return await resolvePluginDownload(projectIdOrSlug);
 });
 
 ipcMain.handle('plugin-install', async (_, opts) => {
@@ -1568,29 +1744,13 @@ ipcMain.handle('plugin-install', async (_, opts) => {
     let fileName = opts.fileName;
 
     if (!downloadUrl && opts.projectId) {
-        const verInfo = await (async () => {
-            const curated = CURATED_PLUGINS.find(p => p.slug === opts.projectId || p.id === opts.projectId);
-            if (curated && curated.directDownload) {
-                return { downloadUrl: curated.directDownload, fileName: curated.defaultFileName };
-            }
-            const vUrl = `https://api.modrinth.com/v2/project/${opts.projectId}/version`;
-            const vResp = await axios.get(vUrl, {
-                headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
-                timeout: 10000
-            });
-            if (Array.isArray(vResp.data) && vResp.data.length > 0) {
-                const jar = vResp.data[0].files.find(f => f.filename.endsWith('.jar')) || vResp.data[0].files[0];
-                return { downloadUrl: jar.url, fileName: jar.filename };
-            }
-            throw new Error('Version not found');
-        })();
-
+        const verInfo = await resolvePluginDownload(opts.projectId);
         downloadUrl = verInfo.downloadUrl;
         fileName = fileName || verInfo.fileName;
     }
 
     if (!downloadUrl) throw new Error('Download URL not found for this plugin.');
-    if (!fileName) fileName = downloadUrl.split('/').pop() || 'plugin.jar';
+    if (!fileName) fileName = downloadUrl.split('/').pop().split('?')[0] || 'plugin.jar';
     if (!fileName.endsWith('.jar')) fileName += '.jar';
 
     const destPath = path.join(pluginsDir, fileName);
@@ -1602,6 +1762,7 @@ ipcMain.handle('plugin-install', async (_, opts) => {
             method: 'GET',
             responseType: 'stream',
             timeout: 180000,
+            maxRedirects: 5,
             headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' }
         });
 
