@@ -1094,18 +1094,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function installPluginFromCard(p, btn) {
         btn.disabled = true;
         btn.className = 'plugin-btn-install downloading';
-        btn.innerHTML = '⏳ Fetching...';
+        btn.innerHTML = '⏳ Resolving...';
 
         try {
-            let downloadUrl = p.directDownload;
-            let fileName = p.defaultFileName;
-
-            if (!downloadUrl) {
-                btn.innerHTML = '⏳ Resolving...';
-                const verInfo = await window.api.pluginGetVersion(p.slug || p.id);
-                downloadUrl = verInfo.downloadUrl;
-                fileName = verInfo.fileName;
-            }
+            const verInfo = await window.api.pluginGetVersion(p.slug || p.id);
+            const downloadUrl = verInfo.downloadUrl;
+            const fileName = verInfo.fileName || p.defaultFileName;
 
             btn.innerHTML = '⬇ Downloading...';
 

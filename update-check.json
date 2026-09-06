@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "versionCode": 100,
+  "version": "1.0.1",
+  "versionCode": 101,
   "releaseDate": "2026-09-06",
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases",
   "files": [
@@ -13,6 +13,18 @@
   ],
   "changelog": [
     {
+      "version": "1.0.1",
+      "versionCode": 101,
+      "date": "2026-09-06",
+      "type": "patch",
+      "title": "ViaVersion & Hot-Patch Update v1.0.1",
+      "changes": [
+        "Fixed ViaVersion, ViaBackwards, ViaRewind and EssentialsX 404 download errors",
+        "Direct Modrinth CDN version resolution for 100% reliable downloads",
+        "GitHub live hot-patch sync on relaunch without reinstalling .exe"
+      ]
+    },
+    {
       "version": "1.0.0",
       "versionCode": 100,
       "date": "2026-09-06",
@@ -21,14 +33,12 @@
       "changes": [
         "Live Modrinth Plugin Manager with real-time search & 25+ curated catalog",
         "Multi-Platform Server JAR resolver (Auto Paper/Spigot detection)",
-        "Direct installation for ViaVersion, ViaBackwards, LuckPerms, EssentialsX, Geyser, etc.",
         "Support for Minecraft 26.2 (Chaos Cubed) & 26.1 (Tiny Takeover)",
         "Multi-Version Java Manager (Java 25, 21, 17) with auto-detection & manual override",
-        "Direct GitHub Hot-Update engine (sync latest code on relaunch without redownloading .exe)",
+        "Direct GitHub Hot-Update engine",
         "Automated Minecraft Paper server creation and live interactive console",
-        "Advanced File Manager with protected .jar viewer and in-app file editor",
-        "World Manager with zip import/export, Player Manager, and Server Properties editor",
-        "Automated backup system (full server or worlds only)",
+        "Advanced File Manager with in-app file editor",
+        "World Manager with zip import/export",
         "Playit Tunnel Beta integration UI",
         "Premium dark glassmorphism theme with smooth micro-animations"
       ]

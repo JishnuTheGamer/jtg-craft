@@ -1374,7 +1374,6 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/P1OZGk5p/ad14260a7308dc9e4c3385f3f6b5bdabfe17f295_96.webp",
         downloads: 12500000,
         categories: ["utility", "management"],
-        directDownload: "https://github.com/ViaVersion/ViaVersion/releases/latest/download/ViaVersion.jar",
         defaultFileName: "ViaVersion.jar"
     },
     {
@@ -1386,7 +1385,6 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/spvEWuz4/c30ec7bf771be79b7692b1b427771765c9288e15_96.webp",
         downloads: 8900000,
         categories: ["utility", "management"],
-        directDownload: "https://github.com/ViaVersion/ViaBackwards/releases/latest/download/ViaBackwards.jar",
         defaultFileName: "ViaBackwards.jar"
     },
     {
@@ -1398,7 +1396,6 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/TbHIxhx5/f59ffe031387b06a9b1efa736dbbb4db44284574_96.webp",
         downloads: 620000,
         categories: ["utility", "management"],
-        directDownload: "https://github.com/ViaVersion/ViaRewind/releases/latest/download/ViaRewind.jar",
         defaultFileName: "ViaRewind.jar"
     },
     {
@@ -1421,7 +1418,6 @@ const CURATED_PLUGINS = [
         icon_url: "https://cdn.modrinth.com/data/O0JyUcuU/icon.png",
         downloads: 15400000,
         categories: ["utility", "economy", "administration"],
-        directDownload: "https://github.com/EssentialsX/Essentials/releases/latest/download/EssentialsX.jar",
         defaultFileName: "EssentialsX.jar"
     },
     {
