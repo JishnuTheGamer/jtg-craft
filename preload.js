@@ -1,7 +1,7 @@
 // ============================================================
 //  Jtg-craft — Preload — Context Bridge (safe IPC exposure)
 // ============================================================
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     // ── Window controls ───────────────────────
@@ -41,12 +41,26 @@ contextBridge.exposeInMainWorld('api', {
     getServerDir:  ()     => ipcRenderer.invoke('get-server-dir'),
 
     // ── File Manager ──────────────────────────
-    fmList:   (rel)        => ipcRenderer.invoke('fm-list', rel),
-    fmRead:   (rel)        => ipcRenderer.invoke('fm-read', rel),
-    fmWrite:  (rel, data)  => ipcRenderer.invoke('fm-write', rel, data),
-    fmDelete: (rel)        => ipcRenderer.invoke('fm-delete', rel),
-    fmRename: (rel, name)  => ipcRenderer.invoke('fm-rename', rel, name),
-    fmUpload: (rel, paths) => ipcRenderer.invoke('fm-upload', rel, paths),
+    fmList:         (rel)        => ipcRenderer.invoke('fm-list', rel),
+    fmRead:         (rel)        => ipcRenderer.invoke('fm-read', rel),
+    fmWrite:        (rel, data)  => ipcRenderer.invoke('fm-write', rel, data),
+    fmDelete:       (rel)        => ipcRenderer.invoke('fm-delete', rel),
+    fmRename:       (rel, name)  => ipcRenderer.invoke('fm-rename', rel, name),
+    fmUpload:       (rel, paths) => ipcRenderer.invoke('fm-upload', rel, paths),
+    fmUploadDialog: (rel)        => ipcRenderer.invoke('fm-upload-dialog', rel),
+    fmExtract:      (rel, name)  => ipcRenderer.invoke('fm-extract', rel, name),
+    getPathForFile: (file) => {
+        try {
+            if (webUtils && typeof webUtils.getPathForFile === 'function') {
+                return webUtils.getPathForFile(file);
+            }
+        } catch (e) {}
+        try {
+            return file.path || '';
+        } catch (e) {
+            return '';
+        }
+    },
 
     // ── World Manager ─────────────────────────
     worldList:   () => ipcRenderer.invoke('world-list'),

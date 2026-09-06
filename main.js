@@ -8,7 +8,7 @@ const path   = require('path');
 const fsSync = require('fs');
 const fs     = require('fs').promises;
 const os     = require('os');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const axios    = require('axios');
 const archiver = require('archiver');
 const { autoUpdater } = require('electron-updater');
@@ -1166,23 +1166,58 @@ ipcMain.handle('world-delete', async (_, name) => {
     await fs.rm(full, { recursive: true, force: true });
 });
 
+// ── Archive Extraction Helper (zip, rar, tar, gz, 7z) ────────
+async function extractArchive(archivePath, destDir) {
+    await fs.mkdir(destDir, { recursive: true });
+    const ext = path.extname(archivePath).toLowerCase();
+
+    let tarErr = null;
+    try {
+        await new Promise((resolve, reject) => {
+            execFile('tar', ['-xf', archivePath, '-C', destDir], { windowsHide: true }, (err, stdout, stderr) => {
+                if (err) return reject(new Error(stderr || err.message));
+                resolve();
+            });
+        });
+        return;
+    } catch (e) {
+        tarErr = e;
+    }
+
+    // If .zip, fallback to PowerShell Expand-Archive
+    if (ext === '.zip') {
+        try {
+            await new Promise((resolve, reject) => {
+                const psCmd = `Expand-Archive -LiteralPath "${archivePath.replace(/"/g, '`"')}" -DestinationPath "${destDir.replace(/"/g, '`"')}" -Force`;
+                execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCmd], { windowsHide: true }, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(stderr || err.message));
+                    resolve();
+                });
+            });
+            return;
+        } catch (psErr) {
+            throw new Error(`Extraction failed: ${psErr.message || tarErr.message}`);
+        }
+    }
+
+    throw new Error(`Extraction failed: ${tarErr ? tarErr.message : 'Unknown error'}`);
+}
+
 ipcMain.handle('world-import', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-        title: 'Import World (.zip)',
-        filters: [{ name: 'ZIP', extensions: ['zip'] }],
+        title: 'Import World (.zip, .rar)',
+        filters: [{ name: 'World Archives', extensions: ['zip', 'rar', 'tar', 'gz', '7z'] }],
         properties: ['openFile']
     });
-    if (result.canceled) return null;
+    if (result.canceled || !result.filePaths.length) return null;
 
-    const zipPath = result.filePaths[0];
-    // Extract using powershell Expand-Archive
-    const destName = path.basename(zipPath, '.zip');
+    const archivePath = result.filePaths[0];
+    const baseExt = path.extname(archivePath);
+    const destName = path.basename(archivePath, baseExt);
     const dest = path.join(currentServerDir, destName);
     await fs.mkdir(dest, { recursive: true });
-    return new Promise((resolve, reject) => {
-        exec(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${dest}' -Force"`,
-            (err) => err ? reject(new Error('Extraction failed')) : resolve(destName));
-    });
+    await extractArchive(archivePath, dest);
+    return destName;
 });
 
 // ── Player Manager ──────────────────────────────────────────
@@ -1298,14 +1333,70 @@ ipcMain.handle('create-backup', async (_, mode) => {
 });
 ipcMain.handle('get-server-dir', () => currentServerDir);
 
-// ── File Manager Upload (Drag & Drop) ───────────────────────
+// ── File Manager Upload (Drag & Drop & IPC) ───────────────────
 ipcMain.handle('fm-upload', async (_, relDir, sourcePaths) => {
+    if (!currentServerDir) throw new Error('No server selected.');
+    if (!Array.isArray(sourcePaths) || sourcePaths.length === 0) return { count: 0 };
     const targetDir = relDir ? path.join(currentServerDir, relDir) : currentServerDir;
+    await fs.mkdir(targetDir, { recursive: true });
+    let count = 0;
     for (const src of sourcePaths) {
+        if (typeof src !== 'string' || !src.trim()) continue;
         const fileName = path.basename(src);
         const targetPath = path.join(targetDir, fileName);
         await fs.copyFile(src, targetPath);
+        count++;
     }
+    return { success: true, count };
+});
+
+ipcMain.handle('fm-upload-dialog', async (_, relDir) => {
+    if (!currentServerDir) throw new Error('No server selected.');
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Files to Upload',
+        filters: [
+            { name: 'All Files (*.*)', extensions: ['*'] },
+            { name: 'Archives / Backups (*.zip, *.rar, *.tar.gz, *.7z)', extensions: ['zip', 'rar', 'tar', 'gz', '7z'] },
+            { name: 'Plugins (*.jar)', extensions: ['jar'] },
+            { name: 'Configs (*.yml, *.yaml, *.json, *.properties)', extensions: ['yml', 'yaml', 'json', 'properties', 'txt'] }
+        ],
+        properties: ['openFile', 'multiSelections']
+    });
+
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    const targetDir = relDir ? path.join(currentServerDir, relDir) : currentServerDir;
+    await fs.mkdir(targetDir, { recursive: true });
+
+    const uploaded = [];
+    for (const src of result.filePaths) {
+        if (typeof src !== 'string' || !src.trim()) continue;
+        const fileName = path.basename(src);
+        const targetPath = path.join(targetDir, fileName);
+        await fs.copyFile(src, targetPath);
+        uploaded.push(fileName);
+    }
+    return { success: true, count: uploaded.length, files: uploaded };
+});
+
+// ── File Manager Archive Extract / Unzip ─────────────────────
+ipcMain.handle('fm-extract', async (_, relDir, fileName) => {
+    if (!currentServerDir) throw new Error('No server selected.');
+    if (!fileName || typeof fileName !== 'string') throw new Error('File name is required.');
+
+    const targetDir = relDir ? path.join(currentServerDir, relDir) : currentServerDir;
+    const archivePath = path.join(targetDir, fileName);
+
+    if (!fsSync.existsSync(archivePath)) {
+        throw new Error(`File "${fileName}" does not exist.`);
+    }
+
+    const isArchive = /\.(zip|rar|tar\.gz|tgz|tar|7z)$/i.test(fileName);
+    if (!isArchive) {
+        throw new Error(`"${fileName}" is not a supported archive format (.zip, .rar, .tar.gz, .tar, .7z).`);
+    }
+
+    await extractArchive(archivePath, targetDir);
+    return { success: true, fileName };
 });
 
 // ── Player Manager Cache ────────────────────────────────────

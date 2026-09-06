@@ -410,20 +410,52 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             items.forEach(item => {
                 const isJar = !item.isDir && item.name.toLowerCase().endsWith('.jar');
+                const isArchive = !item.isDir && /\.(zip|rar|tar\.gz|tgz|tar|7z)$/i.test(item.name);
                 const row = document.createElement('div');
-                row.className = 'fm-row' + (isJar ? ' fm-jar' : '');
-                const icon = item.isDir ? '📁' : (isJar ? '☕' : '📄');
-                const badge = isJar ? ' <span class="fm-jar-badge" title="Binary JAR archive (cannot open in editor)">JAR</span>' : '';
+                row.className = 'fm-row' + (isJar ? ' fm-jar' : '') + (isArchive ? ' fm-archive' : '');
+                const icon = item.isDir ? '📁' : (isJar ? '☕' : (isArchive ? '📦' : '📄'));
+                
+                let badge = '';
+                if (isJar) {
+                    badge = ' <span class="fm-jar-badge" title="Binary JAR archive (cannot open in editor)">JAR</span>';
+                } else if (isArchive) {
+                    const extMatch = item.name.match(/\.([a-z0-9]+)$/i);
+                    const extLabel = extMatch ? extMatch[1].toUpperCase() : 'ARCHIVE';
+                    badge = ` <span class="fm-archive-badge" title="Compressed Archive / Backup (${extLabel})">${extLabel}</span>`;
+                }
+
+                const extractBtn = isArchive ? `<button class="fm-action ext" title="Extract / Unzip archive into current directory">📦 Extract</button>` : '';
 
                 row.innerHTML = `
                     <span class="icon">${icon}</span>
-                    <span class="name" title="${isJar ? 'JAR archive cannot be opened in text editor' : item.name}">${item.name}${badge}</span>
+                    <span class="name" title="${item.name}">${item.name}${badge}</span>
                     <span class="size">${item.isDir ? '' : formatSize(item.size)}</span>
                     <span class="actions">
+                        ${extractBtn}
                         <button class="fm-action ren" title="Rename">✏</button>
                         <button class="fm-action del" title="Delete">🗑</button>
                     </span>
                 `;
+
+                // Extract button click
+                if (isArchive) {
+                    const extBtnEl = row.querySelector('.ext');
+                    if (extBtnEl) {
+                        extBtnEl.onclick = async (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Extract "${item.name}" into current directory?\n(Any files with matching names will be replaced)`)) {
+                                try {
+                                    toast(`Extracting "${item.name}"... please wait`, 'info');
+                                    await window.api.fmExtract(fmCurrentRel, item.name);
+                                    toast(`Extracted "${item.name}" successfully!`, 'success');
+                                    loadFileManager(fmCurrentRel);
+                                } catch (err) {
+                                    toast('Extraction failed: ' + err.message, 'error');
+                                }
+                            }
+                        };
+                    }
+                }
 
                 // Click to navigate or open
                 if (isJar) {
@@ -433,6 +465,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     };
                     row.querySelector('.name').onclick = notifyJar;
                     row.querySelector('.icon').onclick = notifyJar;
+                } else if (isArchive) {
+                    const notifyArchive = (e) => {
+                        e.stopPropagation();
+                        if (confirm(`"${item.name}" is an archive file.\nDo you want to extract it into the current directory?`)) {
+                            row.querySelector('.ext')?.click();
+                        }
+                    };
+                    row.querySelector('.name').onclick = notifyArchive;
+                    row.querySelector('.icon').onclick = notifyArchive;
                 } else {
                     row.querySelector('.name').onclick = () => {
                         if (item.isDir) {
@@ -502,6 +543,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             toast('JAR files cannot be opened in the text editor.', 'warning');
             return;
         }
+        if (name && /\.(zip|rar|tar\.gz|tgz|tar|7z)$/i.test(name)) {
+            toast('Archive files cannot be opened in the text editor. Use the Extract button to unpack.', 'warning');
+            return;
+        }
         if (size && size > 3 * 1024 * 1024) {
             toast('Files larger than 3MB cannot be opened in the text editor.', 'warning');
             return;
@@ -531,17 +576,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Upload via Button
     const fileInput = $('#fm-file-input');
-    $('#fm-upload-btn').onclick = () => fileInput.click();
-    fileInput.onchange = async () => {
-        if (!fileInput.files.length) return;
-        const paths = Array.from(fileInput.files).map(f => f.path);
+    $('#fm-upload-btn').onclick = async () => {
         try {
-            await window.api.fmUpload(fmCurrentRel, paths);
-            toast('Files uploaded successfully');
-            loadFileManager(fmCurrentRel);
-        } catch (e) { toast('Upload failed: ' + e.message, 'error'); }
-        fileInput.value = ''; // reset
+            const res = await window.api.fmUploadDialog(fmCurrentRel);
+            if (res && res.success) {
+                toast(`Uploaded ${res.count} file(s) successfully`, 'success');
+                loadFileManager(fmCurrentRel);
+            }
+        } catch (e) {
+            toast('Upload failed: ' + e.message, 'error');
+        }
     };
+
+    if (fileInput) {
+        fileInput.onchange = async () => {
+            if (!fileInput.files || !fileInput.files.length) return;
+            const paths = [];
+            for (const f of fileInput.files) {
+                let p = '';
+                try {
+                    if (window.api && typeof window.api.getPathForFile === 'function') {
+                        p = window.api.getPathForFile(f);
+                    }
+                } catch (err) {}
+                if (!p && f.path) p = f.path;
+                if (p) paths.push(p);
+            }
+            if (paths.length) {
+                try {
+                    toast('Uploading file(s)...', 'info');
+                    await window.api.fmUpload(fmCurrentRel, paths);
+                    toast('Files uploaded successfully', 'success');
+                    loadFileManager(fmCurrentRel);
+                } catch (e) {
+                    toast('Upload failed: ' + e.message, 'error');
+                }
+            }
+            fileInput.value = ''; // reset
+        };
+    }
 
     // Drag & Drop
     const fmList = $('#fm-list');
@@ -555,13 +628,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     fmList.addEventListener('drop', async (e) => {
         e.preventDefault();
         fmList.classList.remove('drag-over');
-        if (!e.dataTransfer.files.length) return;
-        const paths = Array.from(e.dataTransfer.files).map(f => f.path);
+        if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+
+        const paths = [];
+        for (const f of e.dataTransfer.files) {
+            let p = '';
+            try {
+                if (window.api && typeof window.api.getPathForFile === 'function') {
+                    p = window.api.getPathForFile(f);
+                }
+            } catch (err) {}
+            if (!p && f.path) p = f.path;
+            if (p) paths.push(p);
+        }
+
+        if (!paths.length) {
+            toast('Could not determine file path. Please use "Upload File(s)" button.', 'warning');
+            return;
+        }
+
         try {
-            await window.api.fmUpload(fmCurrentRel, paths);
-            toast('Files uploaded successfully');
+            toast('Uploading file(s)...', 'info');
+            const res = await window.api.fmUpload(fmCurrentRel, paths);
+            toast(`Uploaded ${res && res.count ? res.count : paths.length} file(s) successfully`, 'success');
             loadFileManager(fmCurrentRel);
-        } catch (err) { toast('Upload failed: ' + err.message, 'error'); }
+        } catch (err) {
+            toast('Upload failed: ' + err.message, 'error');
+        }
     });
 
     // ══════════════════════════════════════════════════════════

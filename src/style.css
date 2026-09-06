@@ -635,6 +635,36 @@ input[type="range"]::-webkit-slider-thumb:hover {
     line-height: 1.4;
     vertical-align: middle;
 }
+.fm-archive-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    user-select: none;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+.fm-action.ext {
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 600;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.1);
+}
+.fm-action.ext:hover {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.6);
+}
 
 .fm-editor-wrap {
     position: absolute; inset: 0;
