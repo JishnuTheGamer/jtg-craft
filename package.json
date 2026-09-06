@@ -1,0 +1,64 @@
+{
+  "name": "jtg-craft",
+  "version": "1.0.0",
+  "description": "Jtg-craft — Automated Minecraft Paper Server Manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "author": "Jishnu Tech",
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "archiver-utils": "^5.0.2",
+    "axios": "^1.7.9",
+    "electron-updater": "^6.8.9",
+    "systeminformation": "^5.23.5"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JishnuTheGamer/jtg-craft.git"
+  },
+  "build": {
+    "appId": "com.jtgcraft.app",
+    "productName": "Jtg-craft",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JishnuTheGamer",
+        "repo": "jtg-craft"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Jtg-craft"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "update-check.json",
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/archiver-utils/**/*",
+      "!node_modules/.cache",
+      "!**/*.map"
+    ],
+    "asar": false,
+    "extraResources": []
+  }
+}

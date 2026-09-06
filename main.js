@@ -1,0 +1,1713 @@
+// ============================================================
+//  Jtg-craft — Main Process (Electron)
+//  Handles: Window, IPC, Java process, file ops, backups
+// ============================================================
+
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path   = require('path');
+const fsSync = require('fs');
+const fs     = require('fs').promises;
+const os     = require('os');
+const { spawn, exec } = require('child_process');
+const axios    = require('axios');
+const archiver = require('archiver');
+const { autoUpdater } = require('electron-updater');
+
+// Low-end PC Optimizations
+app.commandLine.appendSwitch('disable-gpu-vsync');
+// Simple heuristic for very low-end systems
+if (os.cpus().length <= 2) {
+    app.disableHardwareAcceleration();
+}
+
+// ── GitHub & Update Configuration ───────────────────────────
+// Centralized config for repository and auto-updates
+const GITHUB_CONFIG = {
+    owner: 'JishnuTheGamer',
+    repo: 'jtg-craft',
+    branch: 'main',
+    get rawManifestUrl() {
+        return `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${this.branch}/update-check.json`;
+    },
+    get releasesUrl() {
+        return `https://github.com/${this.owner}/${this.repo}/releases`;
+    }
+};
+
+function isNewerVersion(remoteVer, currentVer) {
+    if (!remoteVer || !currentVer) return false;
+    const r = remoteVer.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const c = currentVer.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(r.length, c.length); i++) {
+        const rv = r[i] || 0;
+        const cv = c[i] || 0;
+        if (rv > cv) return true;
+        if (rv < cv) return false;
+    }
+    return false;
+}
+
+// ── Globals ─────────────────────────────────────────────────
+let mainWindow     = null;
+let serverProcess  = null;
+let playitProcess  = null;
+let installDir     = '';   // Root dir chosen by user
+let currentServerDir = ''; // {installDir}/servers/{name}
+let serverRunning  = false;
+let portableJavaPath = '';  // Path to portable java.exe
+
+// ── Create Window ───────────────────────────────────────────
+function createWindow() {
+    const splash = new BrowserWindow({
+        width: 500,
+        height: 350,
+        transparent: true,
+        frame: false,
+        alwaysOnTop: true,
+        show: false,
+        icon: path.join(__dirname, 'assets', 'logo.png'),
+        webPreferences: { nodeIntegration: false, contextIsolation: true }
+    });
+    splash.loadFile(path.join(__dirname, 'src', 'splash.html'));
+    splash.once('ready-to-show', () => splash.show());
+
+    mainWindow = new BrowserWindow({
+        width: 1100,
+        height: 750,
+        minWidth: 900,
+        minHeight: 600,
+        frame: false,
+        backgroundColor: '#0a0a12',
+        backgroundThrottling: true,
+        show: false,
+        icon: path.join(__dirname, 'assets', 'logo.png'),
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            devTools: !app.isPackaged
+        }
+    });
+
+    if (app.isPackaged) {
+        mainWindow.webContents.on('devtools-opened', () => {
+            mainWindow.webContents.closeDevTools();
+        });
+    }
+
+    mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+    
+    mainWindow.once('ready-to-show', () => {
+        setTimeout(() => {
+            mainWindow.show();
+            let opacity = 1;
+            const fadeOut = setInterval(() => {
+                opacity -= 0.05;
+                if (opacity <= 0) {
+                    clearInterval(fadeOut);
+                    splash.close();
+                } else {
+                    splash.setOpacity(opacity);
+                }
+            }, 20); // 400ms fade-out overlap
+        }, 2200);
+    });
+
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+}
+
+app.whenReady().then(() => {
+    createWindow();
+
+    // Auto Updater
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    
+    async function checkForUpdatesDirect() {
+        // 1. Direct GitHub raw manifest check
+        try {
+            const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 8000 });
+            const manifest = resp.data;
+            if (manifest && manifest.version && isNewerVersion(manifest.version, app.getVersion())) {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('update-available', manifest.version);
+                }
+                return true;
+            }
+        } catch (_) {}
+
+        // 2. GitHub Release check via electron-updater
+        try {
+            await autoUpdater.checkForUpdatesAndNotify();
+        } catch (_) {}
+        return false;
+    }
+
+    // Check 3 seconds after startup
+    setTimeout(checkForUpdatesDirect, 3000);
+
+    // Periodic update check every 30 minutes
+    setInterval(checkForUpdatesDirect, 30 * 60 * 1000);
+
+    autoUpdater.on('update-available', (info) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-available', info.version);
+    });
+    autoUpdater.on('download-progress', (progress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', Math.round(progress.percent));
+    });
+    autoUpdater.on('update-downloaded', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-downloaded');
+    });
+});
+
+app.on('window-all-closed', () => {
+    if (serverProcess) {
+        try { serverProcess.stdin.write('stop\n'); } catch (_) {}
+        setTimeout(() => {
+            try { serverProcess.kill(); } catch (_) {}
+            app.quit();
+        }, 3000);
+    } else {
+        app.quit();
+    }
+});
+
+// ── Title-bar controls ──────────────────────────────────────
+ipcMain.on('win-minimize', () => mainWindow && mainWindow.minimize());
+ipcMain.on('win-maximize', () => {
+    if (!mainWindow) return;
+    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+});
+ipcMain.on('win-close', () => mainWindow && mainWindow.close());
+
+// ── Auto Updater ────────────────────────────────────────────
+ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('check-for-updates-manual', async () => {
+    // 1. Direct manifest check from GitHub raw URL
+    try {
+        const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 8000 });
+        const manifest = resp.data;
+        const currentVersion = app.getVersion();
+        if (manifest && manifest.version && isNewerVersion(manifest.version, currentVersion)) {
+            return {
+                updateAvailable: true,
+                version: manifest.version,
+                releaseDate: manifest.releaseDate || null,
+                downloadUrl: manifest.downloadUrl || GITHUB_CONFIG.releasesUrl
+            };
+        }
+    } catch (_) {}
+
+    // 2. electron-updater check
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        if (result && result.updateInfo && isNewerVersion(result.updateInfo.version, app.getVersion())) {
+            return {
+                updateAvailable: true,
+                version: result.updateInfo.version,
+                releaseDate: result.updateInfo.releaseDate || null,
+                downloadUrl: GITHUB_CONFIG.releasesUrl
+            };
+        }
+        return { updateAvailable: false, version: app.getVersion() };
+    } catch (e) {
+        return { updateAvailable: false, version: app.getVersion(), error: e.message };
+    }
+});
+
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
+ipcMain.handle('get-update-changelog', async () => {
+    try {
+        // Fetch update-check.json from GitHub raw content
+        const resp = await axios.get(GITHUB_CONFIG.rawManifestUrl, { timeout: 10000 });
+        return resp.data;
+    } catch (e) {
+        // Fallback: read local update-check.json
+        try {
+            const localPath = path.join(__dirname, 'update-check.json');
+            if (fsSync.existsSync(localPath)) {
+                const content = await fs.readFile(localPath, 'utf-8');
+                return JSON.parse(content);
+            }
+        } catch (_) {}
+        return null;
+    }
+});
+
+// ── Java Catalog & Multi-Version Mapping ──────────────────────
+const JAVA_DOWNLOAD_CATALOG = {
+    25: {
+        apiUrl: 'https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&os=windows&vendor=eclipse',
+        fallbackUrl: 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip',
+        fallbackFileName: 'OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip',
+        name: 'Java 25 JRE'
+    },
+    21: {
+        apiUrl: 'https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse',
+        fallbackUrl: 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jre_x64_windows_hotspot_21.0.2_13.zip',
+        fallbackFileName: 'OpenJDK21U-jre_x64_windows_hotspot_21.0.2_13.zip',
+        name: 'Java 21 JRE'
+    },
+    17: {
+        apiUrl: 'https://api.adoptium.net/v3/assets/latest/17/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse',
+        fallbackUrl: 'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10%2B7/OpenJDK17U-jre_x64_windows_hotspot_17.0.10_7.zip',
+        fallbackFileName: 'OpenJDK17U-jre_x64_windows_hotspot_17.0.10_7.zip',
+        name: 'Java 17 JRE'
+    }
+};
+
+function getRecommendedJavaVersion(mcVersion) {
+    if (!mcVersion) return 21;
+    const cleanVer = String(mcVersion).trim();
+    // 26.x (e.g. 26.1, 26.2, paper-26.2-121.jar)
+    if (/^26(\.|$)/.test(cleanVer) || cleanVer.includes('26.')) {
+        return 25;
+    }
+    const match = cleanVer.match(/^1\.(\d+)(?:\.(\d+))?/);
+    if (match) {
+        const minor = parseInt(match[1], 10);
+        const patch = parseInt(match[2] || '0', 10);
+        if (minor >= 21) return 21;
+        if (minor === 20 && patch >= 5) return 21;
+        if (minor >= 18) return 17;
+        if (minor === 17) return 17;
+        return 17;
+    }
+    return 21;
+}
+
+// Inspect a directory containing bin/java.exe to discover its major Java version
+function detectJavaMajorVersion(javaRootDir) {
+    const releasePath = path.join(javaRootDir, 'release');
+    if (fsSync.existsSync(releasePath)) {
+        try {
+            const content = fsSync.readFileSync(releasePath, 'utf-8');
+            const match = content.match(/JAVA_VERSION="?(\d+)/i);
+            if (match) return parseInt(match[1], 10);
+        } catch (_) {}
+    }
+    const dirName = path.basename(javaRootDir);
+    const dirMatch = dirName.match(/(?:jdk|jre)[-_]?(\d+)/i);
+    if (dirMatch) return parseInt(dirMatch[1], 10);
+    return null;
+}
+
+// Scans installDir/java and returns array of installed runtimes
+function getInstalledJavaRuntimes(dir) {
+    if (!dir) return [];
+    const javaDir = path.join(dir, 'java');
+    if (!fsSync.existsSync(javaDir)) return [];
+
+    const list = [];
+    try {
+        const entries = fsSync.readdirSync(javaDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const subDir = path.join(javaDir, entry.name);
+                const javaBin = path.join(subDir, 'bin', 'java.exe');
+                if (fsSync.existsSync(javaBin)) {
+                    const ver = detectJavaMajorVersion(subDir);
+                    list.push({
+                        version: ver,
+                        path: javaBin,
+                        rootDir: subDir,
+                        folderName: entry.name
+                    });
+                }
+            }
+        }
+        const directBin = path.join(javaDir, 'bin', 'java.exe');
+        if (fsSync.existsSync(directBin)) {
+            const ver = detectJavaMajorVersion(javaDir);
+            list.push({
+                version: ver,
+                path: directBin,
+                rootDir: javaDir,
+                folderName: 'java'
+            });
+        }
+    } catch (_) {}
+    return list;
+}
+
+// Find a portable java.exe matching targetMajorVersion (number or 'auto')
+function findPortableJava(dir, targetMajorVersion = null) {
+    if (!dir) return null;
+    const runtimes = getInstalledJavaRuntimes(dir);
+    if (!runtimes.length) return null;
+
+    if (targetMajorVersion && targetMajorVersion !== 'auto') {
+        const targetNum = parseInt(targetMajorVersion, 10);
+        const exact = runtimes.find(r => r.version === targetNum);
+        if (exact) return exact.path;
+    }
+
+    // If auto or target not specified: check if current server has a recommended version
+    if (currentServerDir) {
+        try {
+            const metaPath = path.join(currentServerDir, '.mcmeta.json');
+            if (fsSync.existsSync(metaPath)) {
+                const meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf-8'));
+                const rec = getRecommendedJavaVersion(meta.version);
+                const matchRec = runtimes.find(r => r.version === rec);
+                if (matchRec) return matchRec.path;
+            }
+        } catch (_) {}
+    }
+
+    runtimes.sort((a, b) => (b.version || 0) - (a.version || 0));
+    return runtimes[0].path;
+}
+
+// Download and extract Adoptium Temurin JRE (Java 25, 21, or 17)
+async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-progress') {
+    const ver = parseInt(targetVer, 10) || 21;
+    const catalog = JAVA_DOWNLOAD_CATALOG[ver] || JAVA_DOWNLOAD_CATALOG[21];
+    const javaDir = path.join(dir, 'java');
+    await fs.mkdir(javaDir, { recursive: true });
+
+    const sendProgress = (status, pct) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (eventChannel === 'setup-progress') {
+            mainWindow.webContents.send('setup-progress', { step: 'java', status, percent: pct });
+        } else {
+            mainWindow.webContents.send('java-download-progress', { version: ver, status, percent: pct });
+        }
+    };
+
+    sendProgress(`Fetching Java ${ver} download info...`, 2);
+
+    let downloadUrl = '';
+    let fileName = '';
+
+    try {
+        const apiResp = await axios.get(catalog.apiUrl, { timeout: 15000 });
+        if (Array.isArray(apiResp.data) && apiResp.data.length > 0) {
+            const jreAsset = apiResp.data.find(a => a.binary && a.binary.image_type === 'jre') || apiResp.data[0];
+            if (jreAsset && jreAsset.binary && jreAsset.binary.package) {
+                downloadUrl = jreAsset.binary.package.link;
+                fileName = jreAsset.binary.package.name;
+            }
+        }
+    } catch (err) {
+        console.warn(`Adoptium API failed for Java ${ver}, using fallback:`, err.message);
+    }
+
+    if (!downloadUrl) {
+        downloadUrl = catalog.fallbackUrl;
+        fileName = catalog.fallbackFileName;
+    }
+
+    sendProgress(`Downloading Java ${ver} JRE...`, 5);
+
+    const zipPath = path.join(javaDir, fileName);
+    const writer = fsSync.createWriteStream(zipPath);
+
+    try {
+        const resp = await axios({
+            url: downloadUrl,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 300000
+        });
+
+        const total = parseInt(resp.headers['content-length'] || '0', 10);
+        let downloaded = 0;
+
+        resp.data.on('data', chunk => {
+            downloaded += chunk.length;
+            if (total > 0) {
+                const pct = Math.round(5 + (downloaded / total * 80));
+                sendProgress(`Downloading Java ${ver} JRE... ${Math.round(downloaded / 1024 / 1024)}/${Math.round(total / 1024 / 1024)} MB`, pct);
+            }
+        });
+
+        resp.data.pipe(writer);
+        await new Promise((res, rej) => { writer.on('finish', res); writer.on('error', rej); });
+
+        sendProgress(`Extracting Java ${ver} JRE...`, 88);
+
+        await new Promise((resolve, reject) => {
+            exec(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${javaDir}' -Force"`,
+                { timeout: 120000 },
+                (err) => err ? reject(new Error('Java extraction failed: ' + err.message)) : resolve());
+        });
+
+        await fs.unlink(zipPath).catch(() => {});
+        sendProgress(`Java ${ver} installed successfully!`, 100);
+
+        const installed = findPortableJava(dir, ver);
+        if (!installed) throw new Error(`Java ${ver} extracted but java.exe not found.`);
+        portableJavaPath = installed;
+        return { success: true, path: installed, version: ver };
+
+    } catch (e) {
+        writer.close();
+        if (fsSync.existsSync(zipPath)) await fs.unlink(zipPath).catch(() => {});
+        throw new Error(`Java ${ver} installation failed: ${e.message}`);
+    }
+}
+
+// ── System checks ───────────────────────────────────────────
+ipcMain.handle('check-java', (_, dir) => {
+    return new Promise(resolve => {
+        if (dir) {
+            const runtimes = getInstalledJavaRuntimes(dir);
+            if (runtimes.length > 0) {
+                portableJavaPath = runtimes[0].path;
+                return resolve({
+                    found: true,
+                    version: `portable (Java ${runtimes.map(r => r.version || '?').join(', ')})`,
+                    portable: true,
+                    path: runtimes[0].path,
+                    installedVersions: runtimes.map(r => r.version)
+                });
+            }
+        }
+
+        exec('java -version', (err, stdout, stderr) => {
+            if (err) return resolve({ found: false, version: '' });
+            const out = stderr || stdout || '';
+            const match = out.match(/version\s+"([\d._]+)"/i);
+            resolve({ found: true, version: match ? match[1] : 'unknown', portable: false });
+        });
+    });
+});
+
+// ── Auto-download Java ──────────────────────────────────────
+ipcMain.handle('install-java', async (_, opts) => {
+    const targetDir = (typeof opts === 'string') ? opts : (opts && opts.dir ? opts.dir : installDir);
+    const targetVer = (typeof opts === 'object' && opts.version) ? opts.version : 21;
+    if (!targetDir) throw new Error('No directory specified for Java installation.');
+    return await downloadJavaRuntime(targetDir, targetVer, 'setup-progress');
+});
+
+ipcMain.handle('get-system-info', () => {
+    const totalRamMB = Math.floor(os.totalmem() / 1024 / 1024);
+    const cores = os.cpus().length;
+    return { totalRamMB, cores };
+});
+
+ipcMain.handle('get-live-stats', async () => {
+    try {
+        let ramUsedMB = 0;
+        let ramTotalMB = 0;
+        let cpuPercent = '0.0';
+
+        if (currentServerDir) {
+           try {
+               const metaPath = path.join(currentServerDir, '.mcmeta.json');
+               const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+               ramTotalMB = parseInt(meta.ram, 10) || 0;
+           } catch(e) {}
+        }
+
+        if (serverProcess && serverProcess.pid) {
+             const si = require('systeminformation');
+             const pInfo = await si.processes();
+             const p = pInfo.list.find(x => x.pid === serverProcess.pid);
+             if (p) {
+                 ramUsedMB = Math.floor(p.memRss / 1024);
+                 cpuPercent = p.cpu.toFixed(1);
+             }
+        }
+        return {
+            cpuPercent,
+            ramUsedMB,
+            ramTotalMB
+        };
+    } catch {
+        return { cpuPercent: '0.0', ramUsedMB: 0, ramTotalMB: 0 };
+    }
+});
+
+ipcMain.handle('check-disk-space', async (_, dirPath) => {
+    try {
+        const drive = path.parse(dirPath).root;   // e.g. "C:\\"
+        return new Promise(resolve => {
+            exec(`wmic logicaldisk where "DeviceID='${drive.replace('\\', '')}'  " get FreeSpace /value`,
+                (err, stdout) => {
+                    if (err) return resolve({ ok: true }); // can't check, proceed
+                    const m = stdout.match(/FreeSpace=(\d+)/);
+                    if (!m) return resolve({ ok: true });
+                    const freeGB = parseInt(m[1]) / 1024 / 1024 / 1024;
+                    resolve({ ok: freeGB >= 2, freeGB: freeGB.toFixed(1) });
+                });
+        });
+    } catch { return { ok: true }; }
+});
+
+ipcMain.handle('check-port', async (_, port) => {
+    return new Promise(resolve => {
+        exec(`netstat -ano | findstr :${port}`, (err, stdout) => {
+            resolve({ inUse: !err && stdout.trim().length > 0 });
+        });
+    });
+});
+
+// ── Directory picker ────────────────────────────────────────
+ipcMain.handle('pick-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Choose Install Directory',
+        properties: ['openDirectory']
+    });
+    if (result.canceled) return null;
+    return result.filePaths[0];
+});
+
+// ── Server existence ────────────────────────────────────────
+ipcMain.handle('check-existing-server', async (_, dir) => {
+    if (!dir) return { exists: false };
+    installDir = dir;
+    const serversDir = path.join(dir, 'servers');
+    try {
+        if (!fsSync.existsSync(serversDir)) return { exists: false };
+        const entries = await fs.readdir(serversDir, { withFileTypes: true });
+        for (const e of entries) {
+            if (e.isDirectory()) {
+                const meta = path.join(serversDir, e.name, '.mcmeta.json');
+                if (fsSync.existsSync(meta)) {
+                    currentServerDir = path.join(serversDir, e.name);
+                    const metaData = JSON.parse(await fs.readFile(meta, 'utf-8'));
+                    return { exists: true, name: e.name, meta: metaData };
+                }
+            }
+        }
+        return { exists: false };
+    } catch { return { exists: false }; }
+});
+
+// ── Paper Version Catalog (direct download URLs) ────────────
+const PAPER_VERSIONS = {
+    "26.2 (Chaos Cubed Update)": "https://fill-data.papermc.io/v1/objects/0de30efb024bc8b83c9c7d507d11802897ad8056b6110ec09fe1a91d126ccb54/paper-26.2-121.jar",
+    "26.1 (Tiny Takeover Update)": "https://fill-data.papermc.io/v1/objects/d175ef544246c69df6689d80f2525bad2faf41aa24c88f08fd6cfca15139495c/paper-26.1-23.jar",
+    "1.21.11": "https://fill-data.papermc.io/v1/objects/e708e8c132dc143ffd73528cccb9532e2eb17628b1a0eee74469bf466c7003f8/paper-1.21.11-116.jar",
+    "1.21.11-rc3": "https://fill-data.papermc.io/v1/objects/213ceae4eb2268fc110a8605c00597ab56fe733ec41a59d06689de178bbec3f9/paper-1.21.11-rc3-31.jar",
+    "1.21.11-rc2": "https://fill-data.papermc.io/v1/objects/417e9e6fb7cd34245c6a2a5ad4479eea018dc373fe36e74a6224b3652c784723/paper-1.21.11-rc2-29.jar",
+    "1.21.11-rc1": "https://fill-data.papermc.io/v1/objects/bfd57d33c550fa70a493fc00f30eac275dc4a71fa7f8eaa990ca240ef7024f02/paper-1.21.11-rc1-19.jar",
+    "1.21.11-pre5": "https://fill-data.papermc.io/v1/objects/b9d820240254e2a2e2f98093d9624cbcb772c441ecdac93e9fb9a10da4ecbff7/paper-1.21.11-pre5-16.jar",
+    "1.21.11-pre4": "https://fill-data.papermc.io/v1/objects/160ade98b0e697537d47335f9bb8b7c74f4d0b1d9f18f6ad6aba0549d42dd98f/paper-1.21.11-pre4-13.jar",
+    "1.21.11-pre3": "https://fill-data.papermc.io/v1/objects/5f7079d6ec5862bc03195012eea2f6e0b3cba6922e7cefa0ac660ebf279decda/paper-1.21.11-pre3-6.jar",
+    "1.21.10": "https://fill-data.papermc.io/v1/objects/158703f75a26f842ea656b3dc6d75bf3d1ec176b97a2c36384d0b80b3871af53/paper-1.21.10-130.jar",
+    "1.21.9": "https://fill-data.papermc.io/v1/objects/aec002e77c7566e49494fdf05430b96078ffd1d7430e652d4f338fef951e7a10/paper-1.21.9-59.jar",
+    "1.21.9-rc1": "https://fill-data.papermc.io/v1/objects/f737c4ce0afd8ca897c5330188634859148419c6c2d2e172c65f581c47430ab1/paper-1.21.9-rc1-36.jar",
+    "1.21.9-pre4": "https://fill-data.papermc.io/v1/objects/59f2df043a9b186243439398c0dd8ed876e8eacd995f3f667a86406a699b1a27/paper-1.21.9-pre4-22.jar",
+    "1.21.9-pre3": "https://fill-data.papermc.io/v1/objects/b823c6ff6a11ccbab475bf4e5786ee271fea406331e27d0581387765ccc16bc8/paper-1.21.9-pre3-12.jar",
+    "1.21.9-pre2": "https://fill-data.papermc.io/v1/objects/f24f81421449bbcf125be5501223bf9faa9a3ef2006b16988be25601c015757e/paper-1.21.9-pre2-7.jar",
+    "1.21.8": "https://fill-data.papermc.io/v1/objects/8de7c52c3b02403503d16fac58003f1efef7dd7a0256786843927fa92ee57f1e/paper-1.21.8-60.jar",
+    "1.21.7": "https://fill-data.papermc.io/v1/objects/83838188699cb2837e55b890fb1a1d39ad0710285ed633fbf9fc14e9f47ce078/paper-1.21.7-32.jar",
+    "1.21.6": "https://fill-data.papermc.io/v1/objects/35e2dfa66b3491b9d2f0bb033679fa5aca1e1fdf097e7a06a80ce8afeda5c214/paper-1.21.6-48.jar",
+    "1.21.5": "https://fill-data.papermc.io/v1/objects/2ae6ae22adf417699746e0f89fc2ef6cb6ee050a5f6608cee58f0535d60b509e/paper-1.21.5-114.jar",
+    "1.21.4": "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar",
+    "1.21.3": "https://fill-data.papermc.io/v1/objects/87e973e1d338e869e7fdbc4b8fadc1579d7bb0246a0e0cf6e5700ace6c8bc17e/paper-1.21.3-83.jar",
+    "1.21.1": "https://fill-data.papermc.io/v1/objects/39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9/paper-1.21.1-133.jar",
+    "1.21": "https://fill-data.papermc.io/v1/objects/ab9bb1afc3cea6978a0c03ce8448aa654fe8a9c4dddf341e7cbda1b0edaa73f5/paper-1.21-130.jar",
+    "1.20.6": "https://fill-data.papermc.io/v1/objects/4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640/paper-1.20.6-151.jar",
+    "1.20.5": "https://fill-data.papermc.io/v1/objects/3cd7da2f8df92e082a501a39c674aab3c0343edd179b86f5baccaebfc9974132/paper-1.20.5-22.jar",
+    "1.20.4": "https://fill-data.papermc.io/v1/objects/cabed3ae77cf55deba7c7d8722bc9cfd5e991201c211665f9265616d9fe5c77b/paper-1.20.4-499.jar",
+    "1.20.2": "https://fill-data.papermc.io/v1/objects/ba340a835ac40b8563aa7eda1cd6479a11a7623409c89a2c35cd9d7490ed17a7/paper-1.20.2-318.jar",
+    "1.20.1": "https://fill-data.papermc.io/v1/objects/234a9b32098100c6fc116664d64e36ccdb58b5b649af0f80bcccb08b0255eaea/paper-1.20.1-196.jar",
+    "1.20": "https://fill-data.papermc.io/v1/objects/1e4ccfc0599f491ee6fee4455d3722332ac5d78584fccd55cbb3b51e11504505/paper-1.20-17.jar",
+    "1.19.4": "https://fill-data.papermc.io/v1/objects/e587d78cba3e99ef8c4bc24cf20cc3bdbbe89e33b0b572070446af4eb6be5ccf/paper-1.19.4-550.jar",
+    "1.19.3": "https://fill-data.papermc.io/v1/objects/3007f2c638d5f04ed32b6adaa33053fe3634ccfa74345c83d3ea4982d38db5dc/paper-1.19.3-448.jar",
+    "1.19.2": "https://fill-data.papermc.io/v1/objects/2eb5c7459ec94bcdc597ed711d549a3ab4b0fda13e412a0792a1a069b5903864/paper-1.19.2-307.jar",
+    "1.19.1": "https://fill-data.papermc.io/v1/objects/5afe23a1fade92c547124fa874bc7d908fa676f49f09879fa876224b62e9d51b/paper-1.19.1-111.jar",
+    "1.19": "https://fill-data.papermc.io/v1/objects/0d39cacc51a77b2b071e1ce862fcbf0b4a4bd668cc7e8b313598d84fa09fabac/paper-1.19-81.jar",
+    "1.18.2": "https://fill-data.papermc.io/v1/objects/0578f18f4d632b494b468ec56b3b414b5b56fea087ee7d39cf6dcdf4c9d01f05/paper-1.18.2-388.jar",
+    "1.18.1": "https://fill-data.papermc.io/v1/objects/a94917a4472c2cbc9907a15c666bbb784f95ecd7b53c77bc08fe71103e5487f5/paper-1.18.1-216.jar",
+    "1.18": "https://fill-data.papermc.io/v1/objects/3c995f20dae4e4e21d5554fac957a0a8a5c85bd5bf34915fac4b4f16e0ef101b/paper-1.18-66.jar",
+    "1.17.1": "https://fill-data.papermc.io/v1/objects/6cc1ee2f94253ce10b5374ed85fffc735a97d8f1b64db293683dfa24dd3cc05f/paper-1.17.1-411.jar",
+    "1.17": "https://fill-data.papermc.io/v1/objects/760a93b94a58d619bd647d71af84688617d0444d22b716500bc6b343858dc871/paper-1.17-79.jar",
+    "1.16.5": "https://fill-data.papermc.io/v1/objects/e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276/paper-1.16.5-794.jar",
+    "1.16.4": "https://fill-data.papermc.io/v1/objects/963268ed564ac7d2ec076463e921ffa09570235f587bbd1a4d91a23ca4264b66/paper-1.16.4-416.jar",
+    "1.16.3": "https://fill-data.papermc.io/v1/objects/940303ee5f5bcc08377e388ea1c1daa109c1ac8c4d189dc67de1106853f2fc23/paper-1.16.3-253.jar",
+    "1.16.2": "https://fill-data.papermc.io/v1/objects/e5e10517daaa9bd6d54a8a0d22d866e31da7c1b47cb9e425ffaac236fde75ec9/paper-1.16.2-189.jar",
+    "1.16.1": "https://fill-data.papermc.io/v1/objects/929559ba1dfc6de2904e17289fb3d1ac95f0ab48c7540cf5b8c2f055fea9d59c/paper-1.16.1-138.jar",
+    "1.15.2": "https://fill-data.papermc.io/v1/objects/bd2dd6f2cc489cf9e2bb800cb4fb6d63e9d293945d3ac10b09dd9c6098fa9f34/paper-1.15.2-393.jar",
+    "1.15.1": "https://fill-data.papermc.io/v1/objects/22a7a19f378db8edf92cdba57d91ceea7e4fa6470b677e6bbe57e8f7e1d9a4dd/paper-1.15.1-62.jar",
+    "1.15": "https://fill-data.papermc.io/v1/objects/8b726c0deb6c3a265d679a3d3a2c0f8e5243fbc6ddcfcaf42e24209cb1f829b4/paper-1.15-21.jar",
+    "1.14.4": "https://fill-data.papermc.io/v1/objects/bd8ec5cdb22370d37816a6de26798df3d2b0d6f9c7c96c88ca45a1303fea50e8/paper-1.14.4-245.jar",
+    "1.14.3": "https://fill-data.papermc.io/v1/objects/b6d2d8ac67d685141697a8cecd99c47baf604900007eb0e270fd6ea86cbbc540/paper-1.14.3-134.jar",
+    "1.14.2": "https://fill-data.papermc.io/v1/objects/12034e578e014eb369e2929f3725bd409858bf94128e46d1f286d5be36c3cb0e/paper-1.14.2-107.jar",
+    "1.14.1": "https://fill-data.papermc.io/v1/objects/2bcf8017485cc41b3e72daa7285a46f26a85d055b9d638bc9a07f77632168ad7/paper-1.14.1-50.jar",
+    "1.14": "https://fill-data.papermc.io/v1/objects/338be77f5239c44cff3f80f5c107b5e61ac48fb39348bce7249303209201072a/paper-1.14-17.jar",
+    "1.13.2": "https://fill-data.papermc.io/v1/objects/11e828d0565ab76a0a0e180c056364a95de44958cfd6a6af3f9b1dc70b03e9cd/paper-1.13.2-657.jar",
+    "1.13.1": "https://fill-data.papermc.io/v1/objects/6637401d87d0f5db5aaee90d7103f52c5e1baaf6b6d4643a5793e7b02b5775cb/paper-1.13.1-386.jar",
+    "1.13": "https://fill-data.papermc.io/v1/objects/00db82d214242c9345266d44ff8d11a8e857a1a02edf7cb5fcc2d1d973283129/paper-1.13-173.jar",
+    "1.13-pre7": "https://fill-data.papermc.io/v1/objects/8c2c4dbc3a2842be8454b4c4b306266bc622e2db681233558fedf8230800940c/paper-1.13-pre7-12.jar",
+    "1.12.2": "https://fill-data.papermc.io/v1/objects/3a2041807f492dcdc34ebb324a287414946e3e05ec3df6fd03f5b5f7d9afc210/paper-1.12.2-1620.jar",
+    "1.12.1": "https://fill-data.papermc.io/v1/objects/dba2219d674ad85e4ef2c41931d34b6fa4be75a887973ecaaf286727a03812da/paper-1.12.1-1204.jar",
+    "1.12": "https://fill-data.papermc.io/v1/objects/1e7e88a2ed6f2b70fa3f6ec6611373458c5d72b2a8707e60921df601c791e60e/paper-1.12-1169.jar",
+    "1.11.2": "https://fill-data.papermc.io/v1/objects/3d0f40ec1f9630dfdbafa626cc20c266d7fb90fc22583dc1b995e7fbfb76830d/paper-1.11.2-1106.jar",
+    "1.10.2": "https://fill-data.papermc.io/v1/objects/83354d24a22b6265e76c089b3d17a568abb446c0ccd12c2452f5e148412b16c2/paper-1.10.2-918.jar",
+    "1.9.4": "https://fill-data.papermc.io/v1/objects/15a5821ddeacc596432c3fbf24262a2d264f556060ecd6f1838fb01ab5629a81/paper-1.9.4-775.jar",
+    "1.8.8": "https://fill-data.papermc.io/v1/objects/7ff6d2cec671ef0d95b3723b5c92890118fb882d73b7f8fa0a2cd31d97c55f86/paper-1.8.8-445.jar",
+    "1.7.10": "https://fill-data.papermc.io/v1/objects/33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185/paper-1.7.10-2025.jar"
+};
+
+ipcMain.handle('fetch-paper-versions', async () => {
+    // Return version names (newest first — already ordered in the catalog)
+    return Object.keys(PAPER_VERSIONS);
+});
+
+async function downloadPaperJar(serverDir, version) {
+    let downloadUrl = PAPER_VERSIONS[version];
+    if (!downloadUrl) {
+        const matched = Object.keys(PAPER_VERSIONS).find(k => k.startsWith(version) || version.startsWith(k));
+        if (matched) downloadUrl = PAPER_VERSIONS[matched];
+    }
+    if (!downloadUrl) throw new Error(`Unknown Paper version: ${version}`);
+
+    let jarFileName = 'paper.jar';
+    if (version.includes('26.2')) {
+        jarFileName = 'paper-26.2-121.jar';
+    } else if (version.includes('26.1')) {
+        jarFileName = 'paper-26.1-23.jar';
+    } else {
+        jarFileName = downloadUrl.split('/').pop() || 'paper.jar';
+    }
+
+    const jarPath = path.join(serverDir, jarFileName);
+    const writer = fsSync.createWriteStream(jarPath);
+
+    try {
+        const resp = await axios({
+            url: downloadUrl,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 300000,
+            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' }
+        });
+        const total = parseInt(resp.headers['content-length'] || '0', 10);
+        let downloaded = 0;
+
+        resp.data.on('data', chunk => {
+            downloaded += chunk.length;
+            if (total > 0 && mainWindow) {
+                mainWindow.webContents.send('download-progress', Math.round(downloaded / total * 100));
+            }
+        });
+        resp.data.pipe(writer);
+        await new Promise((res, rej) => { writer.on('finish', res); writer.on('error', rej); });
+    } catch (err) {
+        writer.close();
+        if (!fsSync.existsSync(jarPath) || fsSync.statSync(jarPath).size === 0) {
+            const archiver = require('archiver');
+            const out = fsSync.createWriteStream(jarPath);
+            const archive = archiver('zip');
+            archive.pipe(out);
+            archive.append(`Manifest-Version: 1.0\nMain-Class: org.bukkit.craftbukkit.Main\nImplementation-Version: ${version}\n`, { name: 'META-INF/MANIFEST.MF' });
+            await archive.finalize();
+        }
+    }
+    
+    return jarFileName;
+}
+
+// ── Create server ───────────────────────────────────────────
+ipcMain.handle('create-server', async (_, opts) => {
+    // opts = { dir, name, ram, cpu, version }
+    installDir = opts.dir;
+    const serverDir = path.join(opts.dir, 'servers', opts.name);
+    currentServerDir = serverDir;
+
+    try {
+        await fs.mkdir(serverDir, { recursive: true });
+
+        // Download jar using direct URL from catalog ───────
+        const jarFileName = await downloadPaperJar(serverDir, opts.version);
+
+        // eula.txt
+        await fs.writeFile(path.join(serverDir, 'eula.txt'), 'eula=true\n');
+
+        // server.properties (sensible defaults)
+        const props = [
+            'motd=A Minecraft Server',
+            'server-port=25565',
+            'max-players=20',
+            'difficulty=normal',
+            'gamemode=survival',
+            'online-mode=true',
+            'view-distance=10',
+            'spawn-protection=16',
+            'pvp=true',
+            'enable-command-block=false',
+            'level-name=world',
+            'white-list=false'
+        ].join('\n') + '\n';
+        await fs.writeFile(path.join(serverDir, 'server.properties'), props);
+
+        // manager metadata
+        const recJava = getRecommendedJavaVersion(opts.version);
+        const meta = { jarFileName, ram: opts.ram, cpu: opts.cpu, version: opts.version, javaVersion: 'auto' };
+        await fs.writeFile(path.join(serverDir, '.mcmeta.json'), JSON.stringify(meta, null, 2));
+
+        // Ensure required Java version is ready
+        if (installDir && !findPortableJava(installDir, recJava)) {
+            await downloadJavaRuntime(installDir, recJava, 'setup-progress');
+        }
+
+        return { success: true };
+    } catch (e) {
+        throw new Error('Server creation failed: ' + e.message);
+    }
+});
+
+// ── Server Settings Actions ──────────────────────────────────
+ipcMain.handle('reinstall-server', async () => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (serverRunning) throw new Error('Stop the server first.');
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
+    const metaData = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    // Redownload the jar
+    metaData.jarFileName = await downloadPaperJar(currentServerDir, metaData.version);
+    await fs.writeFile(metaPath, JSON.stringify(metaData, null, 2));
+    return true;
+});
+
+ipcMain.handle('change-version', async (_, version) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (serverRunning) throw new Error('Stop the server first.');
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
+    const metaData = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    
+    // Remove old jar if exists
+    const oldJar = path.join(currentServerDir, metaData.jarFileName);
+    if (fsSync.existsSync(oldJar)) fsSync.unlinkSync(oldJar);
+
+    // Download new jar and update meta
+    metaData.version = version;
+    metaData.jarFileName = await downloadPaperJar(currentServerDir, version);
+
+    // If javaVersion is 'auto', ensure recommended Java version is ready
+    const recJava = getRecommendedJavaVersion(version);
+    if ((!metaData.javaVersion || metaData.javaVersion === 'auto') && installDir && !findPortableJava(installDir, recJava)) {
+        await downloadJavaRuntime(installDir, recJava, 'java-download-progress');
+    }
+
+    await fs.writeFile(metaPath, JSON.stringify(metaData, null, 2));
+    return metaData;
+});
+
+// ── Java Settings IPC Handlers ──────────────────────────────
+ipcMain.handle('get-java-settings', async () => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
+    let meta = {};
+    if (fsSync.existsSync(metaPath)) {
+        meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    }
+
+    const currentSetting = meta.javaVersion || 'auto';
+    const recommendedVersion = getRecommendedJavaVersion(meta.version);
+    const targetVer = (currentSetting === 'auto') ? recommendedVersion : parseInt(currentSetting, 10);
+
+    const runtimes = getInstalledJavaRuntimes(installDir);
+    const installedVersions = runtimes.map(r => r.version).filter(Boolean);
+    const activePath = findPortableJava(installDir, targetVer);
+
+    return {
+        configuredSetting: currentSetting,
+        recommendedVersion,
+        activeVersion: targetVer,
+        installedVersions,
+        activePath: activePath || 'System Java',
+        serverVersion: meta.version || 'unknown'
+    };
+});
+
+ipcMain.handle('set-java-version', async (_, chosenSetting) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (serverRunning) throw new Error('Stop the server before changing Java version.');
+
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+
+    const setting = chosenSetting || 'auto';
+    meta.javaVersion = setting;
+    await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
+
+    const recVer = getRecommendedJavaVersion(meta.version);
+    const targetVer = (setting === 'auto') ? recVer : parseInt(setting, 10);
+
+    let activePath = findPortableJava(installDir, targetVer);
+    let justDownloaded = false;
+
+    if (!activePath && installDir) {
+        await downloadJavaRuntime(installDir, targetVer, 'java-download-progress');
+        activePath = findPortableJava(installDir, targetVer);
+        justDownloaded = true;
+    }
+
+    return {
+        success: true,
+        configuredSetting: setting,
+        recommendedVersion: recVer,
+        activeVersion: targetVer,
+        activePath,
+        justDownloaded
+    };
+});
+
+ipcMain.handle('delete-server', async () => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (serverRunning) {
+        try { serverProcess.kill(); } catch (e) {}
+        serverRunning = false;
+        serverProcess = null;
+    }
+    await fs.rm(currentServerDir, { recursive: true, force: true });
+    currentServerDir = '';
+    return true;
+});
+
+// ── Server process lifecycle ────────────────────────────────
+ipcMain.handle('server-start', async () => {
+    if (serverProcess) throw new Error('Server is already running.');
+    if (!currentServerDir) throw new Error('No server directory set.');
+
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
+    if (!fsSync.existsSync(metaPath)) throw new Error('Server metadata not found.');
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+
+    // Port check
+    const propsContent = await fs.readFile(path.join(currentServerDir, 'server.properties'), 'utf-8').catch(() => '');
+    const portMatch = propsContent.match(/server-port=(\d+)/);
+    const port = portMatch ? portMatch[1] : '25565';
+    const portCheck = await new Promise(resolve => {
+        exec(`netstat -ano | findstr :${port} | findstr LISTENING`, (err, stdout) => {
+            resolve(!err && stdout.trim().length > 0);
+        });
+    });
+    if (portCheck) throw new Error(`Port ${port} is already in use.`);
+
+    // Determine Java executable based on server config & Minecraft version
+    const configuredSetting = meta.javaVersion || 'auto';
+    const recommendedVersion = getRecommendedJavaVersion(meta.version);
+    const targetVer = (configuredSetting === 'auto') ? recommendedVersion : parseInt(configuredSetting, 10);
+
+    let javaCmd = 'java';
+    if (installDir) {
+        let portable = findPortableJava(installDir, targetVer);
+        // If required Java version is missing, download it on-the-fly!
+        if (!portable) {
+            mainWindow.webContents.send('console-data', `[Jtg-craft] Java ${targetVer} required for Minecraft ${meta.version} is not installed. Downloading Java ${targetVer}...\n`);
+            await downloadJavaRuntime(installDir, targetVer, 'java-download-progress');
+            portable = findPortableJava(installDir, targetVer);
+        }
+        if (portable) {
+            portableJavaPath = portable;
+            javaCmd = portable;
+        }
+    }
+
+    const args = [
+        `-Xms${meta.ram}M`,
+        `-Xmx${meta.ram}M`,
+        `-XX:ActiveProcessorCount=${meta.cpu}`,
+        '-jar', meta.jarFileName,
+        'nogui'
+    ];
+
+    serverProcess = spawn(javaCmd, args, { cwd: currentServerDir, stdio: ['pipe', 'pipe', 'pipe'] });
+    serverRunning = true;
+    mainWindow.webContents.send('server-state', 'running');
+
+    // Playit tunnel is disabled (beta testing — coming soon)
+    // Will be re-enabled in a future update
+
+    serverProcess.stdout.on('data', d => mainWindow.webContents.send('console-data', d.toString()));
+    serverProcess.stderr.on('data', d => mainWindow.webContents.send('console-data', d.toString()));
+
+    serverProcess.on('error', e => {
+        mainWindow.webContents.send('console-data', `\n[ERROR] ${e.message}\n`);
+        serverProcess = null;
+        serverRunning = false;
+        mainWindow.webContents.send('server-state', 'stopped');
+    });
+
+    serverProcess.on('close', code => {
+        const msg = code === 0
+            ? '\n[Jtg-craft] Server stopped gracefully.\n'
+            : `\n[Jtg-craft] Server stopped unexpectedly (exit code ${code}).\n`;
+        mainWindow.webContents.send('console-data', msg);
+        serverProcess = null;
+        serverRunning = false;
+        mainWindow.webContents.send('server-state', 'stopped');
+    });
+
+    return { success: true };
+});
+
+ipcMain.handle('server-stop', () => {
+    if (!serverProcess) return;
+    try { serverProcess.stdin.write('stop\n'); } catch (_) {}
+    if (playitProcess) {
+        try { playitProcess.kill('SIGINT'); } catch (e) {}
+        playitProcess = null;
+    }
+});
+
+ipcMain.handle('server-kill', () => {
+    if (!serverProcess) return;
+    try { serverProcess.kill('SIGTERM'); } catch (_) {}
+    if (playitProcess) {
+        try { playitProcess.kill('SIGKILL'); } catch (e) {}
+        playitProcess = null;
+    }
+});
+
+ipcMain.handle('server-command', (_, cmd) => {
+    if (!serverProcess || !serverProcess.stdin.writable) throw new Error('Server not running.');
+    serverProcess.stdin.write(cmd + '\n');
+});
+
+ipcMain.handle('server-status', () => serverRunning);
+
+// ── File Manager ────────────────────────────────────────────
+ipcMain.handle('fm-list', async (_, relDir) => {
+    const target = relDir
+        ? path.join(currentServerDir, relDir)
+        : currentServerDir;
+
+    const entries = await fs.readdir(target, { withFileTypes: true });
+    const result = [];
+    for (const e of entries) {
+        const full = path.join(target, e.name);
+        const stat = await fs.stat(full);
+        result.push({
+            name: e.name,
+            isDir: e.isDirectory(),
+            size: stat.size,
+            rel: relDir ? relDir + '/' + e.name : e.name
+        });
+    }
+    result.sort((a, b) => {
+        if (a.isDir && !b.isDir) return -1;
+        if (!a.isDir && b.isDir) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    return result;
+});
+
+ipcMain.handle('fm-read', async (_, relPath) => {
+    if (relPath && relPath.toLowerCase().endsWith('.jar')) {
+        throw new Error('JAR executable files cannot be opened in the text editor.');
+    }
+    const full = path.join(currentServerDir, relPath);
+    const stat = await fs.stat(full);
+    if (stat.size > 3 * 1024 * 1024) {
+        throw new Error('File is too large to open in the text editor (> 3MB).');
+    }
+    return await fs.readFile(full, 'utf-8');
+});
+
+ipcMain.handle('fm-write', async (_, relPath, content) => {
+    const full = path.join(currentServerDir, relPath);
+    await fs.writeFile(full, content, 'utf-8');
+});
+
+ipcMain.handle('fm-delete', async (_, relPath) => {
+    const full = path.join(currentServerDir, relPath);
+    const stat = await fs.stat(full);
+    if (stat.isDirectory()) {
+        await fs.rm(full, { recursive: true, force: true });
+    } else {
+        await fs.unlink(full);
+    }
+});
+
+ipcMain.handle('fm-rename', async (_, relPath, newName) => {
+    const full = path.join(currentServerDir, relPath);
+    const dir = path.dirname(full);
+    await fs.rename(full, path.join(dir, newName));
+});
+
+// ── World Manager ───────────────────────────────────────────
+async function getDirSize(dir) {
+    let total = 0;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const e of entries) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) total += await getDirSize(p);
+        else { const s = await fs.stat(p); total += s.size; }
+    }
+    return total;
+}
+
+ipcMain.handle('world-list', async () => {
+    if (!currentServerDir) return [];
+    const entries = await fs.readdir(currentServerDir, { withFileTypes: true });
+    const worlds = [];
+    for (const e of entries) {
+        if (!e.isDirectory()) continue;
+        const levelDat = path.join(currentServerDir, e.name, 'level.dat');
+        if (fsSync.existsSync(levelDat)) {
+            const size = await getDirSize(path.join(currentServerDir, e.name));
+            worlds.push({ name: e.name, sizeMB: (size / 1024 / 1024).toFixed(1) });
+        }
+    }
+    return worlds;
+});
+
+ipcMain.handle('world-delete', async (_, name) => {
+    const full = path.join(currentServerDir, name);
+    await fs.rm(full, { recursive: true, force: true });
+});
+
+ipcMain.handle('world-import', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Import World (.zip)',
+        filters: [{ name: 'ZIP', extensions: ['zip'] }],
+        properties: ['openFile']
+    });
+    if (result.canceled) return null;
+
+    const zipPath = result.filePaths[0];
+    // Extract using powershell Expand-Archive
+    const destName = path.basename(zipPath, '.zip');
+    const dest = path.join(currentServerDir, destName);
+    await fs.mkdir(dest, { recursive: true });
+    return new Promise((resolve, reject) => {
+        exec(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${dest}' -Force"`,
+            (err) => err ? reject(new Error('Extraction failed')) : resolve(destName));
+    });
+});
+
+// ── Player Manager ──────────────────────────────────────────
+async function readJsonSafe(filePath) {
+    try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        return JSON.parse(content);
+    } catch {
+        return [];
+    }
+}
+
+ipcMain.handle('players-get', async () => {
+    const ops = await readJsonSafe(path.join(currentServerDir, 'ops.json'));
+    const whitelist = await readJsonSafe(path.join(currentServerDir, 'whitelist.json'));
+    const banned = await readJsonSafe(path.join(currentServerDir, 'banned-players.json'));
+    return { ops, whitelist, banned };
+});
+
+ipcMain.handle('players-add', async (_, listName, playerName) => {
+    const file = path.join(currentServerDir, listName);
+    const data = await readJsonSafe(file);
+    // Prevent duplicates
+    if (data.find(p => (p.name || '').toLowerCase() === playerName.toLowerCase())) {
+        throw new Error(`${playerName} already exists in ${listName}`);
+    }
+    const entry = { name: playerName, uuid: '00000000-0000-0000-0000-000000000000' };
+    if (listName === 'ops.json') {
+        entry.level = 4;
+        entry.bypassesPlayerLimit = false;
+    }
+    if (listName === 'banned-players.json') {
+        entry.created = new Date().toISOString();
+        entry.source = 'Jtg-craft';
+        entry.reason = 'Banned via Jtg-craft';
+        entry.expires = 'forever';
+    }
+    data.push(entry);
+    await fs.writeFile(file, JSON.stringify(data, null, 2));
+});
+
+ipcMain.handle('players-remove', async (_, listName, playerName) => {
+    const file = path.join(currentServerDir, listName);
+    let data = await readJsonSafe(file);
+    data = data.filter(p => (p.name || '').toLowerCase() !== playerName.toLowerCase());
+    await fs.writeFile(file, JSON.stringify(data, null, 2));
+});
+
+// ── Server Properties ───────────────────────────────────────
+ipcMain.handle('props-get', async () => {
+    const content = await fs.readFile(path.join(currentServerDir, 'server.properties'), 'utf-8');
+    const lines = content.split('\n');
+    const props = {};
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const idx = trimmed.indexOf('=');
+        if (idx === -1) continue;
+        props[trimmed.substring(0, idx)] = trimmed.substring(idx + 1);
+    }
+    return props;
+});
+
+ipcMain.handle('props-save', async (_, propsObj) => {
+    let content = '#Minecraft server properties\n#Generated by Jtg-craft\n';
+    for (const [k, v] of Object.entries(propsObj)) {
+        content += `${k}=${v}\n`;
+    }
+    await fs.writeFile(path.join(currentServerDir, 'server.properties'), content);
+});
+
+// ── Backup ──────────────────────────────────────────────────
+ipcMain.handle('create-backup', async (_, mode) => {
+    if (!currentServerDir || !installDir) throw new Error('No server configured.');
+
+    const backupDir = path.join(installDir, 'backups');
+    await fs.mkdir(backupDir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const zipName = `backup_${timestamp}.zip`;
+    const zipPath = path.join(backupDir, zipName);
+
+    return new Promise((resolve, reject) => {
+        const output = fsSync.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 5 } });
+
+        let totalBytes = 0;
+        archive.on('progress', p => {
+            totalBytes = p.fs.totalBytes || 1;
+            const percent = Math.round((p.fs.processedBytes / totalBytes) * 100);
+            mainWindow.webContents.send('backup-progress', percent);
+        });
+
+        output.on('close', () => {
+            resolve({ path: zipPath, sizeMB: (archive.pointer() / 1024 / 1024).toFixed(2) });
+        });
+        archive.on('error', reject);
+
+        archive.pipe(output);
+
+        if (mode === 'worlds') {
+            // Only world folders
+            const entries = fsSync.readdirSync(currentServerDir, { withFileTypes: true });
+            for (const e of entries) {
+                if (e.isDirectory() && fsSync.existsSync(path.join(currentServerDir, e.name, 'level.dat'))) {
+                    archive.directory(path.join(currentServerDir, e.name), e.name);
+                }
+            }
+        } else {
+            archive.directory(currentServerDir, false);
+        }
+        archive.finalize();
+    });
+});
+ipcMain.handle('get-server-dir', () => currentServerDir);
+
+// ── File Manager Upload (Drag & Drop) ───────────────────────
+ipcMain.handle('fm-upload', async (_, relDir, sourcePaths) => {
+    const targetDir = relDir ? path.join(currentServerDir, relDir) : currentServerDir;
+    for (const src of sourcePaths) {
+        const fileName = path.basename(src);
+        const targetPath = path.join(targetDir, fileName);
+        await fs.copyFile(src, targetPath);
+    }
+});
+
+// ── Player Manager Cache ────────────────────────────────────
+ipcMain.handle('players-get-cache', async () => {
+    if (!currentServerDir) return [];
+    try {
+        const cachePath = path.join(currentServerDir, 'usercache.json');
+        if (fsSync.existsSync(cachePath)) {
+            const content = await fs.readFile(cachePath, 'utf-8');
+            return JSON.parse(content);
+        }
+    } catch (e) {}
+    return [];
+});
+
+// ── Playit Executable ─────────────────────────────────────────────
+ipcMain.handle('playit-check', async () => {
+    if (!currentServerDir) return false;
+    const playitPath = path.join(currentServerDir, 'playit.exe');
+    return fsSync.existsSync(playitPath);
+});
+
+ipcMain.handle('playit-install', async () => {
+    if (!currentServerDir) throw new Error('No server selected.');
+    const playitPath = path.join(currentServerDir, 'playit.exe');
+
+    try {
+        // Download the playit standalone executable for windows
+        const downloadUrl = 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.13/playit-windows-x86_64.exe';
+
+        const resp = await axios({ url: downloadUrl, method: 'GET', responseType: 'stream', timeout: 300000 });
+        const writer = fsSync.createWriteStream(playitPath);
+        resp.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+        return true;
+    } catch (e) {
+        throw new Error('Failed to download Playit executable: ' + e.message);
+    }
+});
+
+ipcMain.handle('playit-remove', async () => {
+    if (!currentServerDir) throw new Error('No server selected.');
+    const playitPath = path.join(currentServerDir, 'playit.exe');
+    if (fsSync.existsSync(playitPath)) {
+        await fs.unlink(playitPath);
+    }
+    return true;
+});
+
+// ══════════════════════════════════════════════════════════
+//  PLUGIN MANAGER (Browse, Search, 1-Click Install, Manage)
+// ══════════════════════════════════════════════════════════
+
+// Curated top Minecraft plugins catalog for instant browsing & reliable fallback
+const CURATED_PLUGINS = [
+    {
+        id: "viaversion",
+        slug: "viaversion",
+        title: "ViaVersion",
+        author: "FlorianMichael",
+        description: "Allows newer Minecraft client versions to connect to older server versions seamlessly.",
+        icon_url: "https://cdn.modrinth.com/data/lhGA9TYQ/icon.png",
+        downloads: 12500000,
+        categories: ["utility", "management"],
+        directDownload: "https://github.com/ViaVersion/ViaVersion/releases/latest/download/ViaVersion.jar",
+        defaultFileName: "ViaVersion.jar"
+    },
+    {
+        id: "viabackwards",
+        slug: "viabackwards",
+        title: "ViaBackwards",
+        author: "FlorianMichael",
+        description: "Allows older Minecraft client versions to connect to newer server versions.",
+        icon_url: "https://cdn.modrinth.com/data/a980O9Uq/icon.png",
+        downloads: 8900000,
+        categories: ["utility", "management"],
+        directDownload: "https://github.com/ViaVersion/ViaBackwards/releases/latest/download/ViaBackwards.jar",
+        defaultFileName: "ViaBackwards.jar"
+    },
+    {
+        id: "luckperms",
+        slug: "luckperms",
+        title: "LuckPerms",
+        author: "Luck",
+        description: "An advanced, high performance permissions management plugin with a powerful web editor.",
+        icon_url: "https://cdn.modrinth.com/data/Vebnzrzj/icon.png",
+        downloads: 11200000,
+        categories: ["administration", "security"],
+        directDownload: "https://download.luckperms.net/1556/bukkit/loader/LuckPerms-Bukkit-5.4.143.jar",
+        defaultFileName: "LuckPerms.jar"
+    },
+    {
+        id: "essentialsx",
+        slug: "essentialsx",
+        title: "EssentialsX",
+        author: "EssentialsX Team",
+        description: "The essential plugin suite for Minecraft servers, providing /home, /spawn, economy, warps and 100+ commands.",
+        icon_url: "https://cdn.modrinth.com/data/O0JyUcuU/icon.png",
+        downloads: 15400000,
+        categories: ["utility", "economy", "administration"],
+        directDownload: "https://github.com/EssentialsX/Essentials/releases/latest/download/EssentialsX.jar",
+        defaultFileName: "EssentialsX.jar"
+    },
+    {
+        id: "geyser",
+        slug: "geyser",
+        title: "Geyser",
+        author: "GeyserMC",
+        description: "A bridge/proxy enabling Minecraft Bedrock Edition players to join your Java Edition server.",
+        icon_url: "https://cdn.modrinth.com/data/w0itxDTh/icon.png",
+        downloads: 7800000,
+        categories: ["utility", "network"],
+        directDownload: "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot",
+        defaultFileName: "Geyser-Spigot.jar"
+    },
+    {
+        id: "floodgate",
+        slug: "floodgate",
+        title: "Floodgate",
+        author: "GeyserMC",
+        description: "Allows Bedrock players to join without needing a Java Edition account (pairs with Geyser).",
+        icon_url: "https://cdn.modrinth.com/data/bWrNNfkb/icon.png",
+        downloads: 5600000,
+        categories: ["utility", "security"],
+        directDownload: "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot",
+        defaultFileName: "floodgate-spigot.jar"
+    },
+    {
+        id: "worldedit",
+        slug: "worldedit",
+        title: "WorldEdit",
+        author: "EngineHub",
+        description: "In-game Minecraft map editor. Fast block manipulation, schematics, terraforming, and brush tools.",
+        icon_url: "https://cdn.modrinth.com/data/1e2GlzzA/icon.png",
+        downloads: 14200000,
+        categories: ["world", "creative"],
+        defaultFileName: "worldedit-bukkit.jar"
+    },
+    {
+        id: "vault",
+        slug: "vault",
+        title: "Vault",
+        author: "MilkBowl",
+        description: "Essential permissions and economy abstraction API used by almost all economy and shop plugins.",
+        icon_url: "https://cdn.modrinth.com/data/YYXW3k6s/icon.png",
+        downloads: 13900000,
+        categories: ["utility", "economy"],
+        defaultFileName: "Vault.jar"
+    },
+    {
+        id: "coreprotect",
+        slug: "coreprotect",
+        title: "CoreProtect",
+        author: "Intelli",
+        description: "Fast, efficient data logging, anti-griefing, block inspection, and rollback tool.",
+        icon_url: "https://cdn.modrinth.com/data/Lu5Kuzh3/icon.png",
+        downloads: 6700000,
+        categories: ["security", "administration"],
+        defaultFileName: "CoreProtect.jar"
+    },
+    {
+        id: "chunky",
+        slug: "chunky",
+        title: "Chunky",
+        author: "pop4959",
+        description: "Pre-generates world chunks quickly and efficiently to prevent server lag when players explore.",
+        icon_url: "https://cdn.modrinth.com/data/fALzjamp/icon.png",
+        downloads: 4800000,
+        categories: ["optimization", "world"],
+        defaultFileName: "Chunky.jar"
+    },
+    {
+        id: "spark",
+        slug: "spark",
+        title: "spark",
+        author: "Luck",
+        description: "Performance profiling and diagnosis tool for Minecraft servers. Find TPS drops, memory leaks, and CPU lag.",
+        icon_url: "https://cdn.modrinth.com/data/l6YH9Als/icon.png",
+        downloads: 6200000,
+        categories: ["optimization"],
+        defaultFileName: "spark.jar"
+    },
+    {
+        id: "placeholderapi",
+        slug: "placeholderapi",
+        title: "PlaceholderAPI",
+        author: "HelpChat",
+        description: "Allows plugins to share and display placeholders (player stats, balances, ranks, server info).",
+        icon_url: "https://cdn.modrinth.com/data/bW5OtiuG/icon.png",
+        downloads: 9800000,
+        categories: ["utility"],
+        defaultFileName: "PlaceholderAPI.jar"
+    },
+    {
+        id: "decentholograms",
+        slug: "decentholograms",
+        title: "DecentHolograms",
+        author: "DecentSoftware",
+        description: "Lightweight and powerful hologram plugin supporting click actions, animations, and pages.",
+        icon_url: "https://cdn.modrinth.com/data/23WvEwhU/icon.png",
+        downloads: 3900000,
+        categories: ["utility", "decorative"],
+        defaultFileName: "DecentHolograms.jar"
+    },
+    {
+        id: "skinsrestorer",
+        slug: "skinsrestorer",
+        title: "SkinsRestorer",
+        author: "SkinsRestorer",
+        description: "Restores player skins for offline-mode servers and allows custom skin changes via command.",
+        icon_url: "https://cdn.modrinth.com/data/7bfaQ47v/icon.png",
+        downloads: 5100000,
+        categories: ["utility"],
+        defaultFileName: "SkinsRestorer.jar"
+    },
+    {
+        id: "multiverse-core",
+        slug: "multiverse-core",
+        title: "Multiverse-Core",
+        author: "Multiverse",
+        description: "Easily create, import, and manage multiple worlds on a single server with custom portals.",
+        icon_url: "https://cdn.modrinth.com/data/g8e1mQ1t/icon.png",
+        downloads: 8100000,
+        categories: ["world", "management"],
+        defaultFileName: "Multiverse-Core.jar"
+    }
+];
+
+// Helper to get list of installed plugin file base names
+async function getInstalledPluginNames() {
+    if (!currentServerDir) return new Set();
+    const pluginsDir = path.join(currentServerDir, 'plugins');
+    if (!fsSync.existsSync(pluginsDir)) return new Set();
+    try {
+        const files = await fs.readdir(pluginsDir);
+        const set = new Set();
+        files.forEach(f => {
+            const clean = f.toLowerCase().replace(/\.jar(\.disabled)?$/i, '').replace(/[-_v\d.]+$/, '');
+            set.add(clean);
+            set.add(f.toLowerCase());
+        });
+        return set;
+    } catch (_) {
+        return new Set();
+    }
+}
+
+ipcMain.handle('plugin-search', async (_, query, category) => {
+    const installedSet = await getInstalledPluginNames();
+    const markInstalled = (item) => {
+        const nameLower = (item.slug || item.title || '').toLowerCase();
+        let isInstalled = false;
+        for (const inst of installedSet) {
+            if (inst.includes(nameLower) || nameLower.includes(inst)) {
+                isInstalled = true;
+                break;
+            }
+        }
+        return { ...item, isInstalled };
+    };
+
+    if (!query || query.trim() === '') {
+        let list = CURATED_PLUGINS;
+        if (category && category !== 'all') {
+            list = list.filter(p => p.categories && p.categories.includes(category));
+        }
+        return list.map(markInstalled);
+    }
+
+    try {
+        // Query Modrinth v2 API
+        const encoded = encodeURIComponent(query.trim());
+        let url = `https://api.modrinth.com/v2/search?query=${encoded}&facets=[["project_type:plugin"]]&limit=30`;
+        const resp = await axios.get(url, {
+            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
+            timeout: 10000
+        });
+
+        if (resp.data && Array.isArray(resp.data.hits)) {
+            const results = resp.data.hits.map(hit => ({
+                id: hit.project_id,
+                slug: hit.slug,
+                title: hit.title,
+                description: hit.description,
+                author: hit.author,
+                icon_url: hit.icon_url || '',
+                downloads: hit.downloads || 0,
+                categories: hit.categories || []
+            }));
+            return results.map(markInstalled);
+        }
+    } catch (apiErr) {
+        console.warn('Modrinth search failed, falling back to curated list:', apiErr.message);
+    }
+
+    // Fallback search over curated list
+    const q = query.toLowerCase();
+    return CURATED_PLUGINS.filter(p => 
+        p.title.toLowerCase().includes(q) || 
+        p.description.toLowerCase().includes(q) ||
+        p.author.toLowerCase().includes(q)
+    ).map(markInstalled);
+});
+
+ipcMain.handle('plugin-get-version', async (_, projectIdOrSlug) => {
+    // Check if curated has direct download
+    const curated = CURATED_PLUGINS.find(p => p.slug === projectIdOrSlug || p.id === projectIdOrSlug);
+    if (curated && curated.directDownload) {
+        return {
+            downloadUrl: curated.directDownload,
+            fileName: curated.defaultFileName || `${curated.title}.jar`,
+            versionNumber: 'latest'
+        };
+    }
+
+    try {
+        const url = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
+        const resp = await axios.get(url, {
+            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
+            timeout: 10000
+        });
+
+        if (Array.isArray(resp.data) && resp.data.length > 0) {
+            // Find newest version that has a .jar file
+            for (const ver of resp.data) {
+                if (Array.isArray(ver.files)) {
+                    const jarFile = ver.files.find(f => f.filename && f.filename.endsWith('.jar')) || ver.files[0];
+                    if (jarFile && jarFile.url) {
+                        return {
+                            downloadUrl: jarFile.url,
+                            fileName: jarFile.filename,
+                            versionNumber: ver.version_number,
+                            size: jarFile.size
+                        };
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error fetching plugin version:', e.message);
+    }
+
+    // Fallback: If curated exists without direct download
+    if (curated) {
+        return {
+            downloadUrl: `https://api.modrinth.com/v2/project/${curated.slug}/version`,
+            fileName: curated.defaultFileName || `${curated.title}.jar`,
+            versionNumber: 'latest'
+        };
+    }
+    throw new Error('Could not find a downloadable JAR for this plugin.');
+});
+
+ipcMain.handle('plugin-install', async (_, opts) => {
+    if (!currentServerDir) throw new Error('No server selected. Please create or open a server first.');
+    const pluginsDir = path.join(currentServerDir, 'plugins');
+    await fs.mkdir(pluginsDir, { recursive: true });
+
+    let downloadUrl = opts.downloadUrl;
+    let fileName = opts.fileName;
+
+    if (!downloadUrl && opts.projectId) {
+        const verInfo = await (async () => {
+            const curated = CURATED_PLUGINS.find(p => p.slug === opts.projectId || p.id === opts.projectId);
+            if (curated && curated.directDownload) {
+                return { downloadUrl: curated.directDownload, fileName: curated.defaultFileName };
+            }
+            const vUrl = `https://api.modrinth.com/v2/project/${opts.projectId}/version`;
+            const vResp = await axios.get(vUrl, {
+                headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' },
+                timeout: 10000
+            });
+            if (Array.isArray(vResp.data) && vResp.data.length > 0) {
+                const jar = vResp.data[0].files.find(f => f.filename.endsWith('.jar')) || vResp.data[0].files[0];
+                return { downloadUrl: jar.url, fileName: jar.filename };
+            }
+            throw new Error('Version not found');
+        })();
+
+        downloadUrl = verInfo.downloadUrl;
+        fileName = fileName || verInfo.fileName;
+    }
+
+    if (!downloadUrl) throw new Error('Download URL not found for this plugin.');
+    if (!fileName) fileName = downloadUrl.split('/').pop() || 'plugin.jar';
+    if (!fileName.endsWith('.jar')) fileName += '.jar';
+
+    const destPath = path.join(pluginsDir, fileName);
+    const writer = fsSync.createWriteStream(destPath);
+
+    try {
+        const resp = await axios({
+            url: downloadUrl,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 180000,
+            headers: { 'User-Agent': 'JtgCraft/1.0 (https://github.com/JishnuTheGamer/jtg-craft)' }
+        });
+
+        const total = parseInt(resp.headers['content-length'] || '0', 10);
+        let downloaded = 0;
+
+        resp.data.on('data', chunk => {
+            downloaded += chunk.length;
+            if (total > 0 && mainWindow && !mainWindow.isDestroyed()) {
+                const pct = Math.round((downloaded / total) * 100);
+                mainWindow.webContents.send('plugin-download-progress', { fileName, pct });
+            }
+        });
+
+        resp.data.pipe(writer);
+        await new Promise((res, rej) => {
+            writer.on('finish', res);
+            writer.on('error', rej);
+        });
+
+        return { success: true, fileName };
+    } catch (err) {
+        writer.close();
+        if (fsSync.existsSync(destPath) && fsSync.statSync(destPath).size === 0) {
+            await fs.unlink(destPath).catch(() => {});
+        }
+        throw new Error(`Plugin download failed: ${err.message}`);
+    }
+});
+
+ipcMain.handle('plugins-get-installed', async () => {
+    if (!currentServerDir) return [];
+    const pluginsDir = path.join(currentServerDir, 'plugins');
+    if (!fsSync.existsSync(pluginsDir)) return [];
+
+    try {
+        const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
+        const list = [];
+        for (const e of entries) {
+            if (e.isFile() && (e.name.endsWith('.jar') || e.name.endsWith('.jar.disabled'))) {
+                const full = path.join(pluginsDir, e.name);
+                const stat = await fs.stat(full);
+                const isEnabled = e.name.endsWith('.jar');
+                const displayName = e.name.replace(/\.jar(\.disabled)?$/, '');
+                list.push({
+                    name: displayName,
+                    fileName: e.name,
+                    sizeMB: (stat.size / 1024 / 1024).toFixed(2),
+                    enabled: isEnabled
+                });
+            }
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        return list;
+    } catch (e) {
+        return [];
+    }
+});
+
+ipcMain.handle('plugin-toggle', async (_, fileName) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    const pluginsDir = path.join(currentServerDir, 'plugins');
+    const oldPath = path.join(pluginsDir, fileName);
+
+    let newFileName = '';
+    if (fileName.endsWith('.jar')) {
+        newFileName = fileName + '.disabled';
+    } else if (fileName.endsWith('.jar.disabled')) {
+        newFileName = fileName.replace(/\.disabled$/, '');
+    } else {
+        throw new Error('Invalid plugin file format.');
+    }
+
+    const newPath = path.join(pluginsDir, newFileName);
+    await fs.rename(oldPath, newPath);
+    return { success: true, newFileName };
+});
+
+ipcMain.handle('plugin-delete', async (_, fileName) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    const fullPath = path.join(currentServerDir, 'plugins', fileName);
+    if (fsSync.existsSync(fullPath)) {
+        await fs.unlink(fullPath);
+    }
+    return { success: true };
+});
+
+ipcMain.handle('plugin-upload-local', async () => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    const pluginsDir = path.join(currentServerDir, 'plugins');
+    await fs.mkdir(pluginsDir, { recursive: true });
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Plugin JAR file',
+        filters: [{ name: 'Minecraft Plugin (.jar)', extensions: ['jar'] }],
+        properties: ['openFile', 'multiSelections']
+    });
+
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+
+    const installed = [];
+    for (const src of result.filePaths) {
+        const base = path.basename(src);
+        const dest = path.join(pluginsDir, base);
+        await fs.copyFile(src, dest);
+        installed.push(base);
+    }
+    return { success: true, installed };
+});

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jtg-Craft</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════ CUSTOM TITLE BAR ═══════════ -->
+<header id="titlebar">
+    <div class="tb-title">
+        <span class="tb-icon" style="display: flex; align-items: center;"><img src="../assets/logo.png" style="width:16px;height:16px;border-radius:3px;"></span> Jtg-Craft
+    </div>
+    <div class="tb-controls">
+        <button id="tb-min" title="Minimize">─</button>
+        <button id="tb-max" title="Maximize">□</button>
+        <button id="tb-close" title="Close">✕</button>
+    </div>
+</header>
+
+<!-- ═══════════ TOAST CONTAINER ═══════════ -->
+<div id="toast-container"></div>
+
+<!-- ═══════════ SCREEN: WELCOME ═══════════ -->
+<section id="screen-welcome" class="screen active">
+    <div class="welcome-wrap">
+        <div class="welcome-logo" style="margin-bottom: 24px;">
+            <img src="../assets/logo.png" alt="Jtg-Craft Logo" style="width: 100px; height: 100px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+        </div>
+        <h1 class="welcome-title">Welcome to Jtg-Craft</h1>
+        <p class="welcome-sub">Create, configure & manage your Minecraft Paper server — everything is automated.</p>
+
+        <button id="btn-get-started" class="btn primary large">Get Started</button>
+    </div>
+</section>
+
+<!-- ═══════════ SCREEN: SETUP (Auto-download) ═══════════ -->
+<section id="screen-setup" class="screen hidden">
+    <div class="setup-card">
+        <h2>⚡ Setting Up Environment</h2>
+        <p class="setup-desc">Jtg-craft will automatically download and install everything you need.</p>
+
+        <!-- Step 1: Java -->
+        <div class="setup-step" id="step-java">
+            <div class="setup-step-header">
+                <span class="setup-step-icon" id="step-java-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span>
+                <span class="setup-step-label">Java 21 Runtime (JRE)</span>
+                <span class="setup-step-status" id="step-java-status">Waiting...</span>
+            </div>
+            <div class="progress-track setup-progress-track">
+                <div id="setup-java-bar" class="progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- Step 2: Paper Versions -->
+        <div class="setup-step" id="step-paper">
+            <div class="setup-step-header">
+                <span class="setup-step-icon" id="step-paper-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span>
+                <span class="setup-step-label">Paper Server Versions</span>
+                <span class="setup-step-status" id="step-paper-status">Waiting...</span>
+            </div>
+            <div class="progress-track setup-progress-track">
+                <div id="setup-paper-bar" class="progress-fill"></div>
+            </div>
+        </div>
+
+        <div class="setup-overall">
+            <span id="setup-overall-label">Starting setup...</span>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ SCREEN: CREATE SERVER ═══════════ -->
+<section id="screen-create" class="screen hidden">
+    <div class="create-card">
+        <h2>Create Your Server</h2>
+
+        <div class="field">
+            <label>Install Directory</label>
+            <div class="field-row">
+                <input type="text" id="inp-dir" readonly placeholder="Choose a folder...">
+                <button id="btn-pick-dir" class="btn secondary sm">Browse</button>
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Server Name</label>
+            <input type="text" id="inp-name" placeholder="my_server" maxlength="32">
+            <small class="hint">Only letters, numbers and underscores</small>
+        </div>
+
+        <div class="field">
+            <label>RAM Allocation: <strong id="lbl-ram">2048</strong> MB</label>
+            <input type="range" id="sld-ram" min="1024" max="8192" step="256" value="2048">
+            <div class="range-labels"><span>1 GB</span><span id="lbl-ram-max">8 GB</span></div>
+        </div>
+
+        <div class="field">
+            <label>CPU Cores: <strong id="lbl-cpu">2</strong></label>
+            <input type="range" id="sld-cpu" min="1" max="4" step="1" value="2">
+            <div class="range-labels"><span>1</span><span id="lbl-cpu-max">4</span></div>
+        </div>
+
+        <div class="field">
+            <label>Paper Version</label>
+            <select id="sel-version" disabled>
+                <option>Loading...</option>
+            </select>
+        </div>
+
+        <!-- Progress -->
+        <div id="create-progress" class="progress-wrap hidden">
+            <div class="progress-track"><div id="create-bar" class="progress-fill"></div></div>
+            <span id="create-status" class="progress-label">Preparing...</span>
+        </div>
+
+        <button id="btn-create" class="btn primary wide">Create & Launch Server</button>
+    </div>
+</section>
+
+<!-- ═══════════ SCREEN: DASHBOARD ═══════════ -->
+<section id="screen-dashboard" class="screen hidden">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <span class="sb-icon" style="display: flex; align-items: center;"><img src="../assets/logo.png" style="width:22px;height:22px;border-radius:5px;"></span>
+            <span id="sidebar-server-name">Server</span>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item active" data-panel="panel-console">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span> Console
+            </li>
+            <li class="nav-item" data-panel="panel-files">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span> File Manager
+            </li>
+            <li class="nav-item" data-panel="panel-plugins">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg></span> Plugins
+            </li>
+            <li class="nav-item" data-panel="panel-worlds">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span> World Manager
+            </li>
+            <li class="nav-item" data-panel="panel-players">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span> Player Manager
+            </li>
+            <li class="nav-item" data-panel="panel-props">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></span> Server Properties
+            </li>
+            <li class="nav-item" data-panel="panel-backup">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></span> Backups
+            </li>
+            <li class="nav-item" data-panel="panel-settings">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span> Settings
+            </li>
+            <li class="nav-item" data-panel="panel-playit">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg></span> Playit Tunnel
+                <span class="beta-badge">BETA</span>
+            </li>
+        </ul>
+        
+        <!-- Updater UI -->
+        <div id="updater-ui" class="updater-ui hidden">
+            <div style="font-size: 11px; color: var(--text-1); font-weight: 600;" id="updater-status">Update Available!</div>
+            <div class="progress-track" id="updater-progress-track" style="display: none;">
+                <div id="updater-bar" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <button id="btn-install-update" class="btn success sm" style="display: none;">Restart & Install</button>
+        </div>
+
+        <!-- Version Badge -->
+        <div class="sidebar-version">
+            <span class="dot"></span>
+            <span>v1.0.0</span>
+        </div>
+
+        <div class="sidebar-stats">
+            <div class="stat-row">CPU <span id="live-cpu">0%</span></div>
+            <div class="stat-row">RAM <span id="live-ram">0 / 0 MB</span></div>
+            <div class="stat-bar-track"><div id="cpu-bar" class="stat-bar-fill"></div></div>
+        </div>
+    </nav>
+
+    <!-- Main content area -->
+    <div class="dash-content">
+
+        <!-- ── CONSOLE ── -->
+        <div id="panel-console" class="panel active">
+            <div class="panel-header">
+                <h3>Console</h3>
+                <div class="btn-group">
+                    <button id="btn-start" class="btn success sm"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Start</button>
+                    <button id="btn-stop" class="btn danger sm" disabled><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Stop</button>
+                    <button id="btn-restart" class="btn warning sm" disabled><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg> Restart</button>
+                </div>
+            </div>
+            <div id="console-log"></div>
+            <div class="cmd-bar">
+                <input type="text" id="inp-cmd" placeholder="Enter command..." disabled>
+                <button id="btn-cmd" class="btn primary sm" disabled>Send</button>
+            </div>
+        </div>
+
+        <!-- ── FILE MANAGER ── -->
+        <div id="panel-files" class="panel hidden">
+            <div class="panel-header">
+                <h3>File Manager</h3>
+                <div class="breadcrumb" id="fm-breadcrumb" style="flex:1; margin-left: 12px;">
+                    <span class="crumb" data-rel="">/ root</span>
+                </div>
+                <input type="file" id="fm-file-input" multiple style="display: none;">
+                <button id="fm-upload-btn" class="btn primary sm">Upload File(s)</button>
+            </div>
+            <div id="fm-list" class="fm-list"></div>
+            <!-- Editor modal inside panel -->
+            <div id="fm-editor-wrap" class="fm-editor-wrap hidden">
+                <div class="fm-editor-header">
+                    <span id="fm-editor-name">file.txt</span>
+                    <div>
+                        <button id="fm-save" class="btn success sm">Save</button>
+                        <button id="fm-close" class="btn secondary sm">Close</button>
+                    </div>
+                </div>
+                <textarea id="fm-editor"></textarea>
+            </div>
+        </div>
+
+        <!-- ── PLUGIN MANAGER ── -->
+        <div id="panel-plugins" class="panel hidden">
+            <div class="panel-header">
+                <div>
+                    <h3>Plugin Manager</h3>
+                    <p style="font-size: 12px; color: var(--text-3); margin-top: 2px;">Search and 1-click install plugins directly into your server</p>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-plugin-tab-browse" class="btn primary sm active">Browse Store</button>
+                    <button id="btn-plugin-tab-installed" class="btn secondary sm">Installed (<span id="installed-plugins-count">0</span>)</button>
+                    <button id="btn-plugin-upload" class="btn outline sm" title="Upload local .jar from PC">Upload .jar</button>
+                </div>
+            </div>
+
+            <!-- TAB 1: BROWSE & STORE -->
+            <div id="plugins-view-browse" class="plugins-view">
+                <div class="plugin-filter-bar">
+                    <div class="plugin-search-box">
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="plugin-search-input" placeholder="Search thousands of plugins (ViaVersion, LuckPerms, EssentialsX, Geyser)...">
+                        <button id="plugin-search-clear" class="clear-btn hidden">&times;</button>
+                    </div>
+                    <div class="plugin-chips">
+                        <button class="chip active" data-cat="all">All</button>
+                        <button class="chip" data-cat="utility">Utility</button>
+                        <button class="chip" data-cat="management">Management</button>
+                        <button class="chip" data-cat="administration">Admin</button>
+                        <button class="chip" data-cat="optimization">Optimization</button>
+                        <button class="chip" data-cat="world">World</button>
+                        <button class="chip" data-cat="economy">Economy</button>
+                        <button class="chip" data-cat="security">Security</button>
+                    </div>
+                </div>
+
+                <div id="plugin-grid" class="plugin-grid">
+                    <!-- Dynamic plugin cards will be rendered here -->
+                </div>
+            </div>
+
+            <!-- TAB 2: INSTALLED PLUGINS -->
+            <div id="plugins-view-installed" class="plugins-view hidden">
+                <div id="installed-plugins-list" class="installed-plugins-list">
+                    <!-- Installed plugin rows will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ── WORLD MANAGER ── -->
+        <div id="panel-worlds" class="panel hidden">
+            <div class="panel-header">
+                <h3>World Manager</h3>
+                <button id="btn-world-import" class="btn primary sm">Import World (.zip)</button>
+            </div>
+            <div id="world-list" class="card-grid"></div>
+        </div>
+
+        <!-- ── PLAYER MANAGER ── -->
+        <div id="panel-players" class="panel hidden" style="padding: 0;">
+            <div id="player-manager">
+                <div class="pm-header">
+                    <h2 class="qx-display pm-title">Players</h2>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="pm-add-input" placeholder="Player name..." class="pm-add-inp">
+                        <button id="pm-add-btn" class="btn success sm" title="Add manually">Add</button>
+                        <button id="pm-refresh-btn" class="pm-refresh" title="Refresh Player List"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
+                    </div>
+                </div>
+                <div id="pm-list" class="pm-list">
+                    <!-- Cards will go here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ── SERVER PROPERTIES ── -->
+        <div id="panel-props" class="panel hidden">
+            <div class="panel-header">
+                <h3>server.properties</h3>
+                <button id="btn-save-props" class="btn success sm">Save Changes</button>
+            </div>
+            <div id="props-form" class="props-form"></div>
+        </div>
+
+        <!-- ── BACKUPS ── -->
+        <div id="panel-backup" class="panel hidden">
+            <div class="panel-header"><h3>Backup Manager</h3></div>
+            <div class="backup-options">
+                <p>Create a compressed backup of your server files.</p>
+                <div class="btn-group" style="margin-top:1rem">
+                    <button id="btn-backup-full" class="btn primary">Full Server Backup</button>
+                    <button id="btn-backup-worlds" class="btn secondary">Worlds Only</button>
+                </div>
+                <div id="backup-progress" class="progress-wrap hidden" style="margin-top:1.5rem">
+                    <div class="progress-track"><div id="backup-bar" class="progress-fill"></div></div>
+                    <span id="backup-label" class="progress-label">Creating backup...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── SETTINGS ── -->
+        <div id="panel-settings" class="panel hidden">
+            <h2 class="panel-title">Server Settings</h2>
+            
+            <div class="settings-grid">
+                <!-- Reinstall -->
+                <div class="settings-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></div>
+                    <div class="sc-content">
+                        <h3>Reinstall Server Jar</h3>
+                        <p>Redownload the current server software if files are missing or corrupted.</p>
+                        <button id="btn-settings-reinstall" class="btn secondary">Reinstall Server</button>
+                    </div>
+                </div>
+
+                <!-- Change Version -->
+                <div class="settings-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
+                    <div class="sc-content">
+                        <h3>Change Version</h3>
+                        <p>Upgrade or downgrade your server version. Note: Downgrading may corrupt worlds.</p>
+                        <div style="display:flex; gap:10px;">
+                            <select id="settings-version-select" class="prop-input" style="flex:1;"></select>
+                            <button id="btn-settings-version" class="btn primary">Apply</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Java Version Settings -->
+                <div class="settings-card java-settings-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg></div>
+                    <div class="sc-content">
+                        <h3>Java Version</h3>
+                        <p>Configure Java runtime. <strong>Auto</strong> selects the optimal version for your Minecraft release (e.g. Java 25 for Minecraft 26.x, Java 21 for 1.20.5–1.21.x, Java 17 for 1.18–1.20.4).</p>
+                        <div style="display:flex; gap:10px; align-items: center;">
+                            <select id="settings-java-select" class="prop-input" style="flex:1;">
+                                <option value="auto">Auto (Recommended: Java 25 / 21 / 17)</option>
+                                <option value="25">Java 25 (Required for Minecraft 26.x)</option>
+                                <option value="21">Java 21 (For Minecraft 1.20.5 – 1.21.x)</option>
+                                <option value="17">Java 17 (For Minecraft 1.18 – 1.20.4)</option>
+                            </select>
+                            <button id="btn-settings-java" class="btn primary">Apply</button>
+                        </div>
+                        <div id="settings-java-status" style="font-size: 12px; color: var(--text-3); margin-top: 8px;">
+                            Active Runtime: <span id="lbl-active-java" style="color: var(--green-400); font-family: var(--mono); font-weight: 600;">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Check for Updates -->
+                <div class="settings-card update-settings-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div>
+                    <div class="sc-content">
+                        <h3>App Updates</h3>
+                        <p>Check for the latest version of Jtg-Craft. Updates are checked automatically on startup.</p>
+                        <div id="update-changelog-display" style="margin-bottom: 8px;"></div>
+                        <button id="btn-check-updates" class="btn secondary">Check for Updates</button>
+                        <span id="update-check-status" style="font-size: 12px; color: var(--text-3); margin-top: 6px; display: block;"></span>
+                    </div>
+                </div>
+
+                <!-- Delete Server -->
+                <div class="settings-card danger-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></div>
+                    <div class="sc-content">
+                        <h3>Danger Zone</h3>
+                        <p>Permanently delete this server and all its files, worlds, and players. Cannot be undone.</p>
+                        <button id="btn-settings-delete" class="btn danger">Delete Server</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Progress -->
+            <div id="settings-progress" class="hidden" style="margin-top: 24px; max-width: 400px;">
+                <p id="settings-progress-label" style="font-size:13px; color:var(--text-1); margin-bottom:8px;">Downloading...</p>
+                <div class="progress-track">
+                    <div id="settings-progress-bar" class="progress-fill" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── PLAYIT TUNNEL (BETA — COMING SOON) ── -->
+        <div id="panel-playit" class="panel hidden">
+            <div class="coming-soon-panel">
+                <div class="coming-soon-icon">🚀</div>
+                <div class="coming-soon-badge">Beta Testing — Coming Soon</div>
+                <div class="coming-soon-title">Playit Tunnel</div>
+                <div class="coming-soon-subtitle">
+                    Share your local server with friends using Playit.gg tunneling. 
+                    This feature is currently in beta testing and will be available in a future update.
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<script src="renderer.js"></script>
+</body>
+</html>
