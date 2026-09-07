@@ -388,12 +388,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ══════════════════════════════════════════════════════════
     let fmCurrentRel = '';
 
+    function updateSelectedState() {
+        const allCbs = Array.from(document.querySelectorAll('.fm-item-cb'));
+        const checkedCbs = Array.from(document.querySelectorAll('.fm-item-cb:checked'));
+        const btnDelete = $('#fm-delete-selected-btn');
+        const lblCount = $('#fm-selected-count');
+        const selectAllCb = $('#fm-select-all');
+
+        if (checkedCbs.length > 0) {
+            if (btnDelete) btnDelete.classList.remove('hidden');
+            if (lblCount) lblCount.textContent = checkedCbs.length;
+        } else {
+            if (btnDelete) btnDelete.classList.add('hidden');
+            if (lblCount) lblCount.textContent = '0';
+        }
+
+        if (selectAllCb) {
+            if (allCbs.length > 0 && checkedCbs.length === allCbs.length) {
+                selectAllCb.checked = true;
+                selectAllCb.indeterminate = false;
+            } else if (checkedCbs.length > 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = true;
+            } else {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+            }
+        }
+    }
+
     async function loadFileManager(relDir) {
         fmCurrentRel = relDir;
         updateBreadcrumb(relDir);
         const listEl = $('#fm-list');
         listEl.innerHTML = '';
         $('#fm-editor-wrap').classList.add('hidden');
+
+        // Reset multi-select state
+        const selectAllCb = $('#fm-select-all');
+        if (selectAllCb) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+        }
+        const btnDelete = $('#fm-delete-selected-btn');
+        if (btnDelete) btnDelete.classList.add('hidden');
 
         try {
             const items = await window.api.fmList(relDir || null);
@@ -403,20 +441,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const parentRel = relDir.includes('/') ? relDir.substring(0, relDir.lastIndexOf('/')) : '';
                 const row = document.createElement('div');
                 row.className = 'fm-row';
-                row.innerHTML = `<span class="icon">↩</span><span class="name">..</span>`;
+                row.innerHTML = `<span class="fm-cb-wrap"></span><span class="icon">↩</span><span class="name">..</span>`;
                 row.onclick = () => loadFileManager(parentRel);
                 listEl.appendChild(row);
+            }
+
+            if (!items || items.length === 0) {
+                const emptyRow = document.createElement('div');
+                emptyRow.className = 'fm-row';
+                emptyRow.style.color = 'var(--text-3)';
+                emptyRow.style.justifyContent = 'center';
+                emptyRow.style.padding = '24px';
+                emptyRow.innerHTML = '<span>This folder is empty. Upload files or drop archives here.</span>';
+                listEl.appendChild(emptyRow);
+                return;
             }
 
             items.forEach(item => {
                 const isJar = !item.isDir && item.name.toLowerCase().endsWith('.jar');
                 const isArchive = !item.isDir && /\.(zip|rar|tar\.gz|tgz|tar|7z)$/i.test(item.name);
+                const isSystemMeta = (item.name === '.mcmeta.json');
+
                 const row = document.createElement('div');
-                row.className = 'fm-row' + (isJar ? ' fm-jar' : '') + (isArchive ? ' fm-archive' : '');
-                const icon = item.isDir ? '📁' : (isJar ? '☕' : (isArchive ? '📦' : '📄'));
+                row.className = 'fm-row' + (isJar ? ' fm-jar' : '') + (isArchive ? ' fm-archive' : '') + (isSystemMeta ? ' fm-system' : '');
+                const icon = item.isDir ? '📁' : (isJar ? '☕' : (isArchive ? '📦' : (isSystemMeta ? '⚙️' : '📄')));
                 
                 let badge = '';
-                if (isJar) {
+                if (isSystemMeta) {
+                    badge = ' <span class="fm-system-badge" title="Protected Server Metadata — Required for server startup">SYSTEM</span>';
+                } else if (isJar) {
                     badge = ' <span class="fm-jar-badge" title="Binary JAR archive (cannot open in editor)">JAR</span>';
                 } else if (isArchive) {
                     const extMatch = item.name.match(/\.([a-z0-9]+)$/i);
@@ -426,16 +479,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const extractBtn = isArchive ? `<button class="fm-action ext" title="Extract / Unzip archive into current directory">📦 Extract</button>` : '';
 
+                // Checkbox: protected files cannot be selected for batch deletion
+                const cbHtml = isSystemMeta
+                    ? `<span class="fm-cb-wrap"><span class="fm-cb-lock" title="System protected file — cannot be deleted">🔒</span></span>`
+                    : `<span class="fm-cb-wrap"><input type="checkbox" class="fm-item-cb" data-rel="${item.rel}" data-name="${item.name}"></span>`;
+
+                // Actions: protected files have no delete or rename buttons
+                const actionsHtml = isSystemMeta
+                    ? `<span class="fm-protected-pill" title="Protected file — deletion & renaming disabled">🔒 Protected</span>`
+                    : `
+                        ${extractBtn}
+                        <button class="fm-action ren" title="Rename">✏</button>
+                        <button class="fm-action del" title="Delete">🗑</button>
+                    `;
+
                 row.innerHTML = `
+                    ${cbHtml}
                     <span class="icon">${icon}</span>
                     <span class="name" title="${item.name}">${item.name}${badge}</span>
                     <span class="size">${item.isDir ? '' : formatSize(item.size)}</span>
                     <span class="actions">
-                        ${extractBtn}
-                        <button class="fm-action ren" title="Rename">✏</button>
-                        <button class="fm-action del" title="Delete">🗑</button>
+                        ${actionsHtml}
                     </span>
                 `;
+
+                // Handle Checkbox selection
+                const cbEl = row.querySelector('.fm-item-cb');
+                if (cbEl) {
+                    cbEl.onchange = (e) => {
+                        e.stopPropagation();
+                        row.classList.toggle('selected', cbEl.checked);
+                        updateSelectedState();
+                    };
+                    cbEl.onclick = (e) => e.stopPropagation();
+                }
 
                 // Extract button click
                 if (isArchive) {
@@ -485,29 +562,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                     row.querySelector('.icon').onclick = row.querySelector('.name').onclick;
                 }
 
-                // Rename
-                row.querySelector('.ren').onclick = async (e) => {
-                    e.stopPropagation();
-                    const newName = prompt('Rename to:', item.name);
-                    if (newName && newName !== item.name) {
-                        try {
-                            await window.api.fmRename(item.rel, newName);
-                            loadFileManager(fmCurrentRel);
-                        } catch (err) { toast(err.message, 'error'); }
-                    }
-                };
+                // Rename (only if not system meta)
+                const btnRen = row.querySelector('.ren');
+                if (btnRen) {
+                    btnRen.onclick = async (e) => {
+                        e.stopPropagation();
+                        const newName = prompt('Rename to:', item.name);
+                        if (newName && newName !== item.name) {
+                            try {
+                                await window.api.fmRename(item.rel, newName);
+                                loadFileManager(fmCurrentRel);
+                            } catch (err) { toast(err.message, 'error'); }
+                        }
+                    };
+                }
 
-                // Delete
-                row.querySelector('.del').onclick = async (e) => {
-                    e.stopPropagation();
-                    if (confirm(`Delete "${item.name}"?`)) {
-                        try {
-                            await window.api.fmDelete(item.rel);
-                            loadFileManager(fmCurrentRel);
-                            toast(`Deleted ${item.name}`);
-                        } catch (err) { toast(err.message, 'error'); }
-                    }
-                };
+                // Delete (only if not system meta)
+                const btnDel = row.querySelector('.del');
+                if (btnDel) {
+                    btnDel.onclick = async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete "${item.name}"?`)) {
+                            try {
+                                await window.api.fmDelete(item.rel);
+                                loadFileManager(fmCurrentRel);
+                                toast(`Deleted ${item.name}`);
+                            } catch (err) { toast(err.message, 'error'); }
+                        }
+                    };
+                }
 
                 listEl.appendChild(row);
             });
@@ -573,6 +656,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#fm-close').onclick = () => {
         $('#fm-editor-wrap').classList.add('hidden');
     };
+
+    // Select All Checkbox
+    const selectAllCb = $('#fm-select-all');
+    if (selectAllCb) {
+        selectAllCb.onchange = () => {
+            const checked = selectAllCb.checked;
+            document.querySelectorAll('.fm-item-cb').forEach(cb => {
+                cb.checked = checked;
+                cb.closest('.fm-row')?.classList.toggle('selected', checked);
+            });
+            updateSelectedState();
+        };
+    }
+
+    // Delete Selected (Batch)
+    const btnDeleteSelected = $('#fm-delete-selected-btn');
+    if (btnDeleteSelected) {
+        btnDeleteSelected.onclick = async () => {
+            const checkedCbs = Array.from(document.querySelectorAll('.fm-item-cb:checked'));
+            if (!checkedCbs.length) return;
+            const count = checkedCbs.length;
+            if (confirm(`Delete ${count} selected item(s)?\n(Protected system files like .mcmeta.json will be preserved)`)) {
+                const paths = checkedCbs.map(cb => cb.dataset.rel).filter(r => !r.endsWith('.mcmeta.json'));
+                try {
+                    toast(`Deleting ${count} item(s)...`, 'info');
+                    const res = await window.api.fmDeleteBatch(paths);
+                    toast(`Deleted ${res.count || count} item(s) successfully`, 'success');
+                    loadFileManager(fmCurrentRel);
+                } catch (err) {
+                    toast('Delete failed: ' + err.message, 'error');
+                }
+            }
+        };
+    }
+
+    // Refresh Button
+    const btnRefresh = $('#fm-refresh-btn');
+    if (btnRefresh) {
+        btnRefresh.onclick = () => {
+            loadFileManager(fmCurrentRel);
+            toast('File list refreshed', 'info');
+        };
+    }
 
     // Upload via Button
     const fileInput = $('#fm-file-input');
@@ -1344,7 +1470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const currentAppVer = await window.api.getAppVersion();
             const data = await window.api.getUpdateChangelog();
-            const versionCode = (data && data.versionCode) ? data.versionCode : 100;
+            const versionCode = (data && data.versionCode) ? data.versionCode : 103;
             if (lblVersion) {
                 lblVersion.textContent = `v${currentAppVer} (Build #${versionCode})`;
             }

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.2",
-  "versionCode": 102,
-  "releaseDate": "2026-09-06",
+  "version": "1.0.3",
+  "versionCode": 103,
+  "releaseDate": "2026-09-07",
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases",
   "files": [
     "src/index.html",
@@ -12,6 +12,20 @@
     "update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.3",
+      "versionCode": 103,
+      "date": "2026-09-07",
+      "type": "patch",
+      "title": "Metadata Auto-Heal & File Manager Multi-Select v1.0.3",
+      "changes": [
+        "Auto-healing for server metadata (.mcmeta.json) preventing 'Server metadata not found' crash",
+        "System-level file protection for .mcmeta.json in File Manager (deletion & renaming locked)",
+        "Select All checkbox in File Manager with automatic preservation of system metadata",
+        "Batch deletion support with confirmation dialog for quick backup cleanups",
+        "Refresh button in File Manager toolbar for instant file list sync"
+      ]
+    },
     {
       "version": "1.0.2",
       "versionCode": 102,

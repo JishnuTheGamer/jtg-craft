@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
     fmUpload:       (rel, paths) => ipcRenderer.invoke('fm-upload', rel, paths),
     fmUploadDialog: (rel)        => ipcRenderer.invoke('fm-upload-dialog', rel),
     fmExtract:      (rel, name)  => ipcRenderer.invoke('fm-extract', rel, name),
+    fmDeleteBatch:  (paths)      => ipcRenderer.invoke('fm-delete-batch', paths),
     getPathForFile: (file) => {
         try {
             if (webUtils && typeof webUtils.getPathForFile === 'function') {

@@ -174,7 +174,7 @@
         <!-- Version Badge -->
         <div class="sidebar-version">
             <span class="dot"></span>
-            <span>v1.0.2</span>
+            <span>v1.0.3</span>
         </div>
 
         <div class="sidebar-stats">
@@ -211,8 +211,18 @@
                 <div class="breadcrumb" id="fm-breadcrumb" style="flex:1; margin-left: 12px;">
                     <span class="crumb" data-rel="">/ root</span>
                 </div>
-                <input type="file" id="fm-file-input" multiple style="display: none;">
-                <button id="fm-upload-btn" class="btn primary sm">Upload File(s)</button>
+                <div class="fm-toolbar-actions">
+                    <label class="fm-select-all-label" id="fm-select-all-wrap" title="Select all items in current folder (.mcmeta.json is preserved)">
+                        <input type="checkbox" id="fm-select-all">
+                        <span>Select All</span>
+                    </label>
+                    <button id="fm-delete-selected-btn" class="btn danger sm hidden" title="Delete selected items">
+                        🗑 Delete Selected (<span id="fm-selected-count">0</span>)
+                    </button>
+                    <input type="file" id="fm-file-input" multiple style="display: none;">
+                    <button id="fm-upload-btn" class="btn primary sm">Upload File(s)</button>
+                    <button id="fm-refresh-btn" class="btn outline sm" title="Refresh files">↻</button>
+                </div>
             </div>
             <div id="fm-list" class="fm-list"></div>
             <!-- Editor modal inside panel -->
@@ -391,7 +401,7 @@
                         <div class="update-info-grid">
                             <div class="update-info-item">
                                 <span class="lbl">Installed Version</span>
-                                <span id="lbl-installed-version" class="val">v1.0.2 (Build #102)</span>
+                                <span id="lbl-installed-version" class="val">v1.0.3 (Build #103)</span>
                             </div>
                             <div class="update-info-item">
                                 <span class="lbl">GitHub Source</span>

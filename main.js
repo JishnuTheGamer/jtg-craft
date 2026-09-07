@@ -757,10 +757,27 @@ ipcMain.handle('check-existing-server', async (_, dir) => {
         const entries = await fs.readdir(serversDir, { withFileTypes: true });
         for (const e of entries) {
             if (e.isDirectory()) {
-                const meta = path.join(serversDir, e.name, '.mcmeta.json');
-                if (fsSync.existsSync(meta)) {
-                    currentServerDir = path.join(serversDir, e.name);
-                    const metaData = JSON.parse(await fs.readFile(meta, 'utf-8'));
+                const sDir = path.join(serversDir, e.name);
+                const meta = path.join(sDir, '.mcmeta.json');
+                const hasMeta = fsSync.existsSync(meta);
+
+                let isServerDir = hasMeta;
+                if (!isServerDir) {
+                    try {
+                        const sFiles = await fs.readdir(sDir);
+                        isServerDir = sFiles.some(f => 
+                            f.toLowerCase().endsWith('.jar') || 
+                            f === 'server.properties' || 
+                            f === 'world' || 
+                            f === 'eula.txt' || 
+                            f === 'plugins'
+                        );
+                    } catch (_) {}
+                }
+
+                if (isServerDir) {
+                    currentServerDir = sDir;
+                    const metaData = await ensureServerMetadata(sDir);
                     return { exists: true, name: e.name, meta: metaData };
                 }
             }
@@ -945,14 +962,122 @@ ipcMain.handle('create-server', async (_, opts) => {
     }
 });
 
+// ── Server Metadata Auto-Healing & Verification ─────────────
+async function ensureServerMetadata(serverDir) {
+    if (!serverDir) throw new Error('No server directory set.');
+    const metaPath = path.join(serverDir, '.mcmeta.json');
+
+    try {
+        if (fsSync.existsSync(metaPath)) {
+            const raw = await fs.readFile(metaPath, 'utf-8');
+            if (raw && raw.trim().length > 0) {
+                const meta = JSON.parse(raw);
+                if (meta && meta.jarFileName && fsSync.existsSync(path.join(serverDir, meta.jarFileName))) {
+                    return meta;
+                }
+                if (meta && typeof meta === 'object') {
+                    return await repairMetadata(serverDir, meta);
+                }
+            }
+        }
+    } catch (_) {}
+
+    return await repairMetadata(serverDir, null);
+}
+
+async function repairMetadata(serverDir, existingMeta = null) {
+    const metaPath = path.join(serverDir, '.mcmeta.json');
+    const meta = (existingMeta && typeof existingMeta === 'object') ? { ...existingMeta } : {};
+
+    // 1. Scan for jar files in serverDir
+    let foundJar = '';
+    try {
+        const files = await fs.readdir(serverDir);
+        const jars = files.filter(f => f.toLowerCase().endsWith('.jar'));
+
+        if (meta.jarFileName && jars.includes(meta.jarFileName)) {
+            foundJar = meta.jarFileName;
+        } else {
+            // Find paper or server jar
+            const paperJar = jars.find(j => j.toLowerCase().startsWith('paper'));
+            if (paperJar) {
+                foundJar = paperJar;
+            } else if (jars.length > 0) {
+                foundJar = jars[0];
+            }
+        }
+    } catch (_) {}
+
+    // 2. Deducing Minecraft version
+    let detectedVer = meta.version || '';
+    if (foundJar) {
+        if (foundJar.includes('26.2')) {
+            detectedVer = '26.2 (Chaos Cubed Update)';
+        } else if (foundJar.includes('26.1')) {
+            detectedVer = '26.1 (Tiny Takeover Update)';
+        } else {
+            const vMatch = foundJar.match(/([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-rc[0-9]+|-pre[0-9]+)?)/i);
+            if (vMatch) {
+                const candidate = vMatch[1];
+                const catalogMatch = Object.keys(PAPER_VERSIONS).find(k => k.startsWith(candidate) || candidate.startsWith(k));
+                detectedVer = catalogMatch || candidate;
+            }
+        }
+    }
+
+    if (!detectedVer) {
+        try {
+            const vhPath = path.join(serverDir, 'version_history.json');
+            if (fsSync.existsSync(vhPath)) {
+                const vh = JSON.parse(await fs.readFile(vhPath, 'utf-8'));
+                if (vh.currentVersion) {
+                    const match = vh.currentVersion.match(/([0-9]+\.[0-9]+(?:\.[0-9]+)?)/);
+                    if (match) detectedVer = match[1];
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!detectedVer) {
+        detectedVer = '26.2 (Chaos Cubed Update)';
+    }
+
+    // 3. If jar is missing, auto-download Paper jar
+    if (!foundJar) {
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('console-data', `[Jtg-craft] Server core JAR missing. Auto-downloading Paper ${detectedVer}...\n`);
+            }
+            foundJar = await downloadPaperJar(serverDir, detectedVer);
+        } catch (_) {
+            foundJar = 'paper.jar';
+        }
+    }
+
+    meta.jarFileName = foundJar;
+    meta.version = detectedVer;
+    meta.ram = parseInt(meta.ram, 10) || 2048;
+    meta.cpu = parseInt(meta.cpu, 10) || 2;
+    meta.javaVersion = meta.javaVersion || 'auto';
+
+    try {
+        await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('console-data', `[Jtg-craft] Auto-healed server metadata (.mcmeta.json) [Core: ${foundJar}, MC: ${detectedVer}, RAM: ${meta.ram}MB]\n`);
+        }
+    } catch (_) {}
+
+    return meta;
+}
+
 // ── Server Settings Actions ──────────────────────────────────
 ipcMain.handle('reinstall-server', async () => {
     if (!currentServerDir) throw new Error('No server directory set.');
     if (serverRunning) throw new Error('Stop the server first.');
-    const metaPath = path.join(currentServerDir, '.mcmeta.json');
-    const metaData = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    const metaData = await ensureServerMetadata(currentServerDir);
     // Redownload the jar
     metaData.jarFileName = await downloadPaperJar(currentServerDir, metaData.version);
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
     await fs.writeFile(metaPath, JSON.stringify(metaData, null, 2));
     return true;
 });
@@ -960,12 +1085,13 @@ ipcMain.handle('reinstall-server', async () => {
 ipcMain.handle('change-version', async (_, version) => {
     if (!currentServerDir) throw new Error('No server directory set.');
     if (serverRunning) throw new Error('Stop the server first.');
-    const metaPath = path.join(currentServerDir, '.mcmeta.json');
-    const metaData = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    const metaData = await ensureServerMetadata(currentServerDir);
     
     // Remove old jar if exists
-    const oldJar = path.join(currentServerDir, metaData.jarFileName);
-    if (fsSync.existsSync(oldJar)) fsSync.unlinkSync(oldJar);
+    if (metaData.jarFileName) {
+        const oldJar = path.join(currentServerDir, metaData.jarFileName);
+        if (fsSync.existsSync(oldJar)) fsSync.unlinkSync(oldJar);
+    }
 
     // Download new jar and update meta
     metaData.version = version;
@@ -977,6 +1103,7 @@ ipcMain.handle('change-version', async (_, version) => {
         await downloadJavaRuntime(installDir, recJava, 'java-download-progress');
     }
 
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
     await fs.writeFile(metaPath, JSON.stringify(metaData, null, 2));
     return metaData;
 });
@@ -984,11 +1111,7 @@ ipcMain.handle('change-version', async (_, version) => {
 // ── Java Settings IPC Handlers ──────────────────────────────
 ipcMain.handle('get-java-settings', async () => {
     if (!currentServerDir) throw new Error('No server directory set.');
-    const metaPath = path.join(currentServerDir, '.mcmeta.json');
-    let meta = {};
-    if (fsSync.existsSync(metaPath)) {
-        meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
-    }
+    const meta = await ensureServerMetadata(currentServerDir);
 
     const currentSetting = meta.javaVersion || 'auto';
     const recommendedVersion = getRecommendedJavaVersion(meta.version);
@@ -1012,11 +1135,11 @@ ipcMain.handle('set-java-version', async (_, chosenSetting) => {
     if (!currentServerDir) throw new Error('No server directory set.');
     if (serverRunning) throw new Error('Stop the server before changing Java version.');
 
-    const metaPath = path.join(currentServerDir, '.mcmeta.json');
-    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    const meta = await ensureServerMetadata(currentServerDir);
 
     const setting = chosenSetting || 'auto';
     meta.javaVersion = setting;
+    const metaPath = path.join(currentServerDir, '.mcmeta.json');
     await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
 
     const recVer = getRecommendedJavaVersion(meta.version);
@@ -1058,9 +1181,7 @@ ipcMain.handle('server-start', async () => {
     if (serverProcess) throw new Error('Server is already running.');
     if (!currentServerDir) throw new Error('No server directory set.');
 
-    const metaPath = path.join(currentServerDir, '.mcmeta.json');
-    if (!fsSync.existsSync(metaPath)) throw new Error('Server metadata not found.');
-    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    const meta = await ensureServerMetadata(currentServerDir);
 
     // Port check & auto-healing
     const propsPath = path.join(currentServerDir, 'server.properties');
@@ -1232,6 +1353,12 @@ ipcMain.handle('fm-write', async (_, relPath, content) => {
 });
 
 ipcMain.handle('fm-delete', async (_, relPath) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (!relPath) return;
+    const cleanRel = String(relPath).replace(/\\/g, '/').replace(/^\//, '').trim();
+    if (cleanRel === '.mcmeta.json') {
+        throw new Error('Protected system file: .mcmeta.json cannot be deleted.');
+    }
     const full = path.join(currentServerDir, relPath);
     const stat = await fs.stat(full);
     if (stat.isDirectory()) {
@@ -1242,9 +1369,43 @@ ipcMain.handle('fm-delete', async (_, relPath) => {
 });
 
 ipcMain.handle('fm-rename', async (_, relPath, newName) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (!relPath) return;
+    const cleanRel = String(relPath).replace(/\\/g, '/').replace(/^\//, '').trim();
+    if (cleanRel === '.mcmeta.json') {
+        throw new Error('Protected system file: .mcmeta.json cannot be renamed.');
+    }
     const full = path.join(currentServerDir, relPath);
     const dir = path.dirname(full);
     await fs.rename(full, path.join(dir, newName));
+});
+
+ipcMain.handle('fm-delete-batch', async (_, relPaths) => {
+    if (!currentServerDir) throw new Error('No server directory set.');
+    if (!Array.isArray(relPaths) || relPaths.length === 0) return { success: true, count: 0 };
+
+    let deletedCount = 0;
+    for (const relPath of relPaths) {
+        if (!relPath) continue;
+        const cleanRel = String(relPath).replace(/\\/g, '/').replace(/^\//, '').trim();
+        // Strict protection for system metadata
+        if (cleanRel === '.mcmeta.json') continue;
+
+        try {
+            const full = path.join(currentServerDir, relPath);
+            if (!fsSync.existsSync(full)) continue;
+            const stat = await fs.stat(full);
+            if (stat.isDirectory()) {
+                await fs.rm(full, { recursive: true, force: true });
+            } else {
+                await fs.unlink(full);
+            }
+            deletedCount++;
+        } catch (e) {
+            console.warn(`[fm-delete-batch] Could not delete ${relPath}:`, e.message);
+        }
+    }
+    return { success: true, count: deletedCount };
 });
 
 // ── World Manager ───────────────────────────────────────────
