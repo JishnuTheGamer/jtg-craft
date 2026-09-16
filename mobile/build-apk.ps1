@@ -109,7 +109,7 @@ try {
 # ── 6. Copy Finished APK to mobile\apk\ ──────────────────────
 $builtApk = Join-Path $ScriptDir "android\app\build\outputs\apk\debug\app-debug.apk"
 if (Test-Path $builtApk) {
-    $targetApk = Join-Path $ApkOutDir "jtg-craft-mobile-v1.0.1.apk"
+    $targetApk = Join-Path $ApkOutDir "jtg-craft-mobile-v1.0.4.apk"
     Copy-Item -Path $builtApk -Destination $targetApk -Force
     
     Write-Host "`n========================================================" -ForegroundColor Green

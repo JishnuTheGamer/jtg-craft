@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
-  "versionCode": 1003,
+  "version": "1.0.4",
+  "versionCode": 1004,
   "releaseDate": "2026-09-16",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
@@ -17,6 +17,20 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.4",
+      "versionCode": 1004,
+      "date": "2026-09-16",
+      "type": "patch",
+      "title": "Java Runtime Installation & Scoped Storage Fix v1.0.4",
+      "changes": [
+        "Fixed EACCES (Permission denied) on Java runtime setup by directing download and extraction to isolated app internal storage (getFilesDir)",
+        "Secured persistent archive caching in app-specific external storage (getExternalFilesDir) avoiding Android 11+ Scoped Storage restrictions",
+        "Eliminated unverified fallback to /storage/emulated/0/Download paths during Java environment setup",
+        "Added test-read validation before attempting to unpack any cached Java runtime archives",
+        "Synchronized installed OTA version state to prevent repeated update banners after patch application"
+      ]
+    },
     {
       "version": "1.0.3",
       "versionCode": 1003,

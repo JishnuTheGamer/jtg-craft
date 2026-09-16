@@ -31,25 +31,45 @@ public class JavaManagerPlugin extends Plugin {
         return d;
     }
 
-    public static File getPersistentArchive() {
-        File[] candidates = new File[] {
-            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre17-android.tar.xz"),
-            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "jre17-android.tar.xz"),
-            new File("/storage/emulated/0/Download/JtgCraft/jre17-android.tar.xz"),
-            new File("/storage/emulated/0/Download/jre17-android.tar.xz"),
-            new File("/storage/emulated/0/JtgCraft/jre17-android.tar.xz"),
-            new File("/sdcard/Download/JtgCraft/jre17-android.tar.xz"),
-            new File("/sdcard/Download/jre17-android.tar.xz"),
-            new File("/sdcard/JtgCraft/jre17-android.tar.xz")
-        };
-        for (File f : candidates) {
-            try {
-                if (f != null && f.exists() && f.length() > 5000000) {
-                    return f;
+    public static File getPersistentArchive(Context ctx) {
+        if (ctx == null) return null;
+        try {
+            // Priority 1: App internal files directory (Always 100% accessible, zero permissions needed)
+            File f1 = new File(ctx.getFilesDir(), "jre-android.tar.xz");
+            if (f1.exists() && f1.canRead() && f1.length() > 10000000) {
+                try (InputStream in = new FileInputStream(f1)) {
+                    if (in.read() != -1) return f1;
+                } catch (Throwable ignored) {}
+            }
+
+            // Priority 2: App external files directory (Always 100% accessible, zero runtime permissions needed)
+            File extDir = ctx.getExternalFilesDir(null);
+            if (extDir != null) {
+                File f2 = new File(extDir, "jre-android.tar.xz");
+                if (f2.exists() && f2.canRead() && f2.length() > 10000000) {
+                    try (InputStream in = new FileInputStream(f2)) {
+                        if (in.read() != -1) return f2;
+                    } catch (Throwable ignored) {}
                 }
-            } catch (Exception ignored) {}
-        }
-        return candidates[0];
+            }
+
+            // Priority 3: External public storage ONLY if canRead() and test read succeeds
+            File[] pubCandidates = new File[] {
+                new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre17-android.tar.xz"),
+                new File("/storage/emulated/0/Download/JtgCraft/jre17-android.tar.xz"),
+                new File("/sdcard/Download/JtgCraft/jre17-android.tar.xz")
+            };
+            for (File f : pubCandidates) {
+                if (f != null && f.exists() && f.canRead() && f.length() > 10000000) {
+                    try (InputStream in = new FileInputStream(f)) {
+                        if (in.read() != -1) return f;
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        // Never return an unverified file! Return null so it downloads cleanly into app storage
+        return null;
     }
 
     public File getJavaBinary() {
@@ -111,24 +131,26 @@ public class JavaManagerPlugin extends Plugin {
             }
 
             // Check if persistent archive is cached on phone storage (e.g. after app reinstall)
-            File archive = getPersistentArchive();
-            if (archive != null && archive.exists() && archive.length() > 10000000) {
-                File javaDir = getJavaRootDir();
-                if (javaDir.exists()) deleteRecursive(javaDir);
-                javaDir.mkdirs();
-                extractArchive(archive, javaDir);
-                setExecutableRecursive(javaDir);
+            File archive = getPersistentArchive(getContext());
+            if (archive != null && archive.exists() && archive.canRead() && archive.length() > 10000000) {
+                try {
+                    File javaDir = getJavaRootDir();
+                    if (javaDir.exists()) deleteRecursive(javaDir);
+                    javaDir.mkdirs();
+                    extractArchive(archive, javaDir);
+                    setExecutableRecursive(javaDir);
 
-                File recoveredBin = getJavaBinary();
-                if (recoveredBin.exists()) {
-                    recoveredBin.setExecutable(true, false);
-                    JSObject ret = new JSObject();
-                    ret.put("installed", true);
-                    ret.put("version", "17");
-                    ret.put("path", recoveredBin.getAbsolutePath());
-                    call.resolve(ret);
-                    return;
-                }
+                    File recoveredBin = getJavaBinary();
+                    if (recoveredBin.exists()) {
+                        recoveredBin.setExecutable(true, false);
+                        JSObject ret = new JSObject();
+                        ret.put("installed", true);
+                        ret.put("version", "17");
+                        ret.put("path", recoveredBin.getAbsolutePath());
+                        call.resolve(ret);
+                        return;
+                    }
+                } catch (Throwable ignored) {}
             }
 
             JSObject ret = new JSObject();
@@ -151,18 +173,26 @@ public class JavaManagerPlugin extends Plugin {
             FileOutputStream out = null;
             try {
                 // First check if persistent archive already exists on phone storage!
-                File persistentArchive = getPersistentArchive();
-                File targetArchive;
+                File persistentArchive = getPersistentArchive(getContext());
+                File targetArchive = null;
 
-                if (persistentArchive != null && persistentArchive.exists() && persistentArchive.length() > 10000000) {
-                    // Reuse local cached archive
-                    targetArchive = persistentArchive;
-                    JSObject notify = new JSObject();
-                    notify.put("step", "java");
-                    notify.put("status", "Found local cached Java archive! Extracting...");
-                    notify.put("percent", 70);
-                    notifyListeners("setup-progress", notify);
-                } else {
+                if (persistentArchive != null && persistentArchive.exists() && persistentArchive.canRead() && persistentArchive.length() > 10000000) {
+                    try {
+                        try (InputStream testIn = new FileInputStream(persistentArchive)) {
+                            testIn.read();
+                        }
+                        targetArchive = persistentArchive;
+                        JSObject notify = new JSObject();
+                        notify.put("step", "java");
+                        notify.put("status", "Found local cached Java archive! Extracting...");
+                        notify.put("percent", 70);
+                        notifyListeners("setup-progress", notify);
+                    } catch (Throwable ignored) {
+                        targetArchive = null;
+                    }
+                }
+
+                if (targetArchive == null) {
                     // Download PojavLauncher Android OpenJDK ARM64
                     String urlStr = POJAV_JRE17_ARM64_URL;
 
@@ -198,7 +228,7 @@ public class JavaManagerPlugin extends Plugin {
                     long totalBytes = conn.getContentLengthLong();
                     in = conn.getInputStream();
 
-                    targetArchive = new File(getContext().getCacheDir(), "jre-android.tar.xz");
+                    targetArchive = new File(getContext().getFilesDir(), "jre-android.tar.xz");
                     out = new FileOutputStream(targetArchive);
 
                     byte[] buf = new byte[32768];
@@ -235,21 +265,14 @@ public class JavaManagerPlugin extends Plugin {
                         throw new IOException("Downloaded archive is incomplete (" + targetArchive.length() + " bytes)");
                     }
 
-                    // Save persistent copy to phone storage for reinstalls
+                    // Save persistent copy to app external storage
                     try {
-                        File[] saveLocations = new File[] {
-                            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre17-android.tar.xz"),
-                            new File("/storage/emulated/0/Download/JtgCraft/jre17-android.tar.xz"),
-                            new File("/sdcard/Download/JtgCraft/jre17-android.tar.xz")
-                        };
-                        for (File p : saveLocations) {
-                            try {
-                                File parent = p.getParentFile();
-                                if (parent != null && !parent.exists()) parent.mkdirs();
-                                copyFile(targetArchive, p);
-                            } catch (Exception ignored) {}
+                        File extAppDir = getContext().getExternalFilesDir(null);
+                        if (extAppDir != null) {
+                            if (!extAppDir.exists()) extAppDir.mkdirs();
+                            copyFile(targetArchive, new File(extAppDir, "jre-android.tar.xz"));
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Throwable ignored) {}
                 }
 
                 // Notify extracting

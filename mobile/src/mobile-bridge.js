@@ -1045,11 +1045,16 @@
         },
         getAppVersion: async () => {
             try {
+                let nativeVer = '1.0.0';
                 if (CapApp.getInfo) {
                     const info = await CapApp.getInfo();
-                    return info.version || '1.0.0';
+                    if (info && info.version) nativeVer = info.version;
                 }
-                return '1.0.0';
+                const otaVer = localStorage.getItem('installed_ota_version');
+                if (otaVer && isNewerVersion(otaVer, nativeVer)) {
+                    return otaVer;
+                }
+                return nativeVer;
             } catch (e) {
                 return '1.0.0';
             }
@@ -1077,7 +1082,11 @@
                     });
                 }
 
-                return { success: true, updatedFiles: updated, version: manifest.version || '1.0.2', versionCode: manifest.versionCode || 1002 };
+                if (manifest.version) {
+                    localStorage.setItem('installed_ota_version', manifest.version);
+                }
+
+                return { success: true, updatedFiles: updated, version: manifest.version || '1.0.4', versionCode: manifest.versionCode || 1004 };
             } catch (e) {
                 return { error: 'Failed to apply data-center update: ' + e.message };
             }
