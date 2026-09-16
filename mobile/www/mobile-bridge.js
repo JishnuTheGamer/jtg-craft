@@ -983,7 +983,7 @@
                     });
                 }
 
-                return { success: true, updatedFiles: updated };
+                return { success: true, updatedFiles: updated, version: manifest.version || '1.0.2', versionCode: manifest.versionCode || 1002 };
             } catch (e) {
                 return { error: 'Failed to apply data-center update: ' + e.message };
             }

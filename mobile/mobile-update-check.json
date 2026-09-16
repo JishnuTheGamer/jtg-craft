@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "versionCode": 1001,
+  "version": "1.0.2",
+  "versionCode": 1002,
   "releaseDate": "2026-09-16",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
@@ -17,6 +17,21 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.2",
+      "versionCode": 1002,
+      "date": "2026-09-16",
+      "type": "patch",
+      "title": "Mobile Server Execution & UI Stability Hotfix v1.0.2",
+      "changes": [
+        "Fixed server start/stop button toggling by correctly parsing native state payload",
+        "Fixed restart process polling loop hanging indefinitely",
+        "Added Netty NIO transport (-Dio.netty.transport.noNative=true) to prevent Android socket native crash",
+        "Added Paper JVM bypass flags (-DPaper.IgnoreJavaVersion=true) for mobile stability",
+        "Added automatic web asset synchronization before compiling Android APK",
+        "Enforced Os.chmod 0755 execution permissions for Java runtime and JNI libraries"
+      ]
+    },
     {
       "version": "1.0.1",
       "versionCode": 1001,

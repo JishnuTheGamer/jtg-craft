@@ -389,6 +389,10 @@ public class ServerProcessPlugin extends Plugin {
                         "-Duser.home=" + sdir.getAbsolutePath(),
                         "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(),
                         "-Dpaper.disable-watchdog=true",
+                        "-DPaper.IgnoreJavaVersion=true",
+                        "-Dpaper.ignoreJavaVersion=true",
+                        "-Dio.netty.transport.noNative=true",
+                        "-Dlog4j2.formatMsgNoLookups=true",
                         "-Dfile.encoding=UTF-8",
                         "-Dterminal.jline=false",
                         "-Dterminal.ansi=false",
@@ -654,6 +658,9 @@ public class ServerProcessPlugin extends Plugin {
             if (p.contains("/bin/") || p.contains("\\bin\\") || p.endsWith(".so") || file.getName().equals("java")) {
                 file.setExecutable(true, false);
                 file.setReadable(true, false);
+                try {
+                    android.system.Os.chmod(p, 0755);
+                } catch (Throwable ignored) {}
             }
         }
     }

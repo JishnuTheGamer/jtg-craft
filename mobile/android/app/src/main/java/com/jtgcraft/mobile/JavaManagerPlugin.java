@@ -400,6 +400,9 @@ public class JavaManagerPlugin extends Plugin {
             if (p.contains("/bin/") || p.contains("\\bin\\") || p.endsWith(".so") || file.getName().equals("java")) {
                 file.setExecutable(true, false);
                 file.setReadable(true, false);
+                try {
+                    Os.chmod(p, 0755);
+                } catch (Throwable ignored) {}
             }
         }
     }

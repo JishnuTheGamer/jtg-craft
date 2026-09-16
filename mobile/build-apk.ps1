@@ -80,8 +80,17 @@ if (-not (Test-Path $platform34)) {
 }
 Write-Host "Android SDK Platform 34 Installed" -ForegroundColor Green
 
-# ── 4. Write local.properties for Gradle ─────────────────────
-Write-Host "`n[4/5] Configuring Gradle environment..." -ForegroundColor Yellow
+# ── 4. Sync Web Assets to Android Project ───────────────────
+Write-Host "`n[4/5] Syncing latest web assets to Android..." -ForegroundColor Yellow
+$webAssets = Join-Path $ScriptDir "www"
+$androidPublicAssets = Join-Path $ScriptDir "android\app\src\main\assets\public"
+if (Test-Path $webAssets) {
+    Copy-Item -Path "$webAssets\*" -Destination $androidPublicAssets -Recurse -Force
+    Write-Host "Web assets synced to $androidPublicAssets" -ForegroundColor Green
+}
+
+# ── 4b. Write local.properties for Gradle ─────────────────────
+Write-Host "`n[4b/5] Configuring Gradle environment..." -ForegroundColor Yellow
 $escapedSdkDir = $SdkDir.Replace("\", "\\")
 $localProps = Join-Path $ScriptDir "android\local.properties"
 Set-Content -Path $localProps -Value "sdk.dir=$escapedSdkDir"

@@ -356,7 +356,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // window.api.onPlayitConsoleData is still registered in preload but the panel is static
 
     window.api.onServerState(state => {
-        const running = state === 'running';
+        // state comes as { running: true/false } from Java backend
+        const running = (typeof state === 'object' && state !== null) ? !!state.running : (state === 'running' || state === true);
         $('#btn-start').disabled = running;
         $('#btn-stop').disabled = !running;
         $('#btn-restart').disabled = !running;
@@ -390,8 +391,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             await window.api.serverStop();
             // Wait for process to end, then restart
             const waitForStop = setInterval(async () => {
-                const running = await window.api.serverStatus();
-                if (!running) {
+                const status = await window.api.serverStatus();
+                // serverStatus() returns { running: true/false }
+                const isRunning = (typeof status === 'object' && status !== null) ? !!status.running : !!status;
+                if (!isRunning) {
                     clearInterval(waitForStop);
                     setTimeout(startServer, 1000);
                 }
@@ -1639,8 +1642,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Live Hot-Update Download Progress listener
     if (window.api.onHotUpdateProgress) {
         window.api.onHotUpdateProgress(({ current, total, file, pct }) => {
-            if (barProgress) barProgress.style.width = `${pct}%`;
-            if (lblPct) lblPct.textContent = `${pct}%`;
+            const percent = pct !== undefined ? pct : (total > 0 ? Math.round((current * 100) / total) : 0);
+            if (barProgress) barProgress.style.width = `${percent}%`;
+            if (lblPct) lblPct.textContent = `${percent}%`;
             if (lblFile) lblFile.textContent = `Syncing ${file} (${current}/${total})...`;
         });
     }
