@@ -1,0 +1,273 @@
+/* ============================================================
+   Jtg-craft Mobile — Responsive Patches
+   Touch-friendly overrides for Android devices
+   ============================================================ */
+
+/* ── Hide Electron-specific elements ─────────────────────── */
+#titlebar {
+    display: none !important;
+}
+
+/* Reclaim the titlebar space */
+body {
+    padding-top: 0 !important;
+    /* Safe area for notch/punch-hole displays */
+    padding-top: env(safe-area-inset-top) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+    padding-left: env(safe-area-inset-left) !important;
+    padding-right: env(safe-area-inset-right) !important;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+}
+
+/* ── Touch-friendly button sizes (min 44px) ──────────────── */
+.btn,
+button,
+.nav-item,
+.tab-btn,
+.fm-toolbar button,
+.setup-step-header {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    touch-action: manipulation;
+}
+
+.btn.primary.large {
+    min-height: 52px !important;
+    font-size: 16px !important;
+    padding: 14px 32px !important;
+}
+
+/* ── Navigation — Bottom bar on mobile ───────────────────── */
+@media (max-width: 768px) {
+    .dashboard-layout {
+        flex-direction: column !important;
+        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    }
+
+    .sidebar {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        flex-direction: row !important;
+        padding: 6px 8px env(safe-area-inset-bottom) !important;
+        z-index: 1000 !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-right: none !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        gap: 4px !important;
+        background: rgba(10, 14, 26, 0.95) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+    }
+
+    .sidebar .nav-item {
+        flex-direction: column !important;
+        font-size: 10px !important;
+        padding: 6px 10px !important;
+        min-width: 56px !important;
+        gap: 3px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+
+    .sidebar .nav-item .nav-icon {
+        font-size: 18px !important;
+    }
+
+    .sidebar .nav-label {
+        font-size: 10px !important;
+    }
+
+    .content-area {
+        margin-left: 0 !important;
+        padding-bottom: 76px !important;
+        width: 100% !important;
+        height: 100% !important;
+        overflow-y: auto !important;
+    }
+
+    /* Server info header — stack vertically on mobile */
+    .server-info-header {
+        flex-direction: column !important;
+        gap: 12px !important;
+        align-items: stretch !important;
+    }
+
+    .server-info-header .server-controls {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .server-info-header .server-controls .btn {
+        flex: 1 1 auto !important;
+        min-width: 100px !important;
+    }
+
+    /* Console — full width */
+    .console-wrap {
+        max-height: 300px !important;
+    }
+
+    .console-input-row {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .console-input-row input {
+        width: 100% !important;
+    }
+
+    /* Stats cards — 2 columns on mobile */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+
+    /* Plugin cards — single column */
+    .plugin-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* File Manager */
+    .fm-toolbar {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    .fm-table th,
+    .fm-table td {
+        padding: 10px 8px !important;
+        font-size: 13px !important;
+    }
+
+    /* Properties editor */
+    .props-table td {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .props-table td input {
+        width: 100% !important;
+    }
+
+    /* Welcome screen */
+    .welcome-wrap {
+        padding: 20px !important;
+    }
+
+    .welcome-title {
+        font-size: 24px !important;
+    }
+
+    /* Setup screen */
+    .setup-card {
+        margin: 12px !important;
+        padding: 16px !important;
+    }
+
+    /* World manager cards */
+    .world-card {
+        flex-direction: column !important;
+    }
+
+    .world-card .world-actions {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+}
+
+/* ── Very small screens (< 400px) ────────────────────────── */
+@media (max-width: 400px) {
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .sidebar .nav-item {
+        min-width: 48px !important;
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+    }
+}
+
+/* ── Scrollbar — hide on mobile (native scrolling) ───────── */
+::-webkit-scrollbar {
+    width: 4px !important;
+    height: 4px !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-radius: 4px !important;
+}
+
+/* ── Mobile-specific toast positioning ───────────────────── */
+#toast-container {
+    bottom: 80px !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+}
+
+.toast {
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 13px !important;
+}
+
+/* ── Prevent text selection on interactive elements ──────── */
+.nav-item,
+.btn,
+button,
+.tab-btn,
+.fm-row,
+.plugin-card,
+.world-card {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+}
+
+/* ── Allow text selection in editor and console ──────────── */
+.fm-editor textarea,
+.console-output,
+.console-input-row input {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+}
+
+/* ── Mobile RAM warning ──────────────────────────────────── */
+.mobile-ram-warning {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 53, 53, 0.1));
+    border: 1px solid rgba(255, 107, 53, 0.3);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #ff9f6b;
+}
+
+.mobile-ram-warning .warning-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+/* ── Status bar color blend ──────────────────────────────── */
+.status-bar-blend {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background: rgba(10, 14, 26, 0.98);
+    z-index: 9999;
+}

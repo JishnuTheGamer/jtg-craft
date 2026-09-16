@@ -1,0 +1,23 @@
+{
+  "name": "jtg-craft-mobile",
+  "version": "1.0.0",
+  "description": "Jtg-craft Mobile — Minecraft Server Manager for Android",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx cap sync android",
+    "open": "npx cap open android",
+    "run": "npx cap run android"
+  },
+  "author": "Jishnu Tech",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.0",
+    "@capacitor/network": "^6.0.0",
+    "@capacitor/device": "^6.0.0",
+    "@capacitor/local-notifications": "^6.0.0",
+    "@capacitor/app": "^6.0.0"
+  }
+}

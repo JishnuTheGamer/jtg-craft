@@ -4,17 +4,18 @@
 
 <img src="assets/logo.png" alt="Jtg-Craft Logo" width="128" height="128" style="border-radius: 24px; box-shadow: 0 8px 32px rgba(34, 197, 94, 0.25);" />
 
-### The Ultimate Minecraft Paper Server Manager for Windows
+### The Ultimate Minecraft Paper Server Manager for Windows & Android
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-22c55e?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
-[![Platform](https://img.shields.io/badge/Platform-Windows_10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
+[![Release PC](https://img.shields.io/badge/PC_Release-v1.0.3-22c55e?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
+[![Mobile Edition](https://img.shields.io/badge/Mobile_Architecture-Android_6+-00E5FF?style=for-the-badge&logo=android&logoColor=white)](mobile/)
+[![Data Center](https://img.shields.io/badge/OTA_Update_Center-Active-9333EA?style=for-the-badge&logo=cloud&logoColor=white)](mobile/mobile-update-check.json)
 [![Minecraft](https://img.shields.io/badge/PaperMC-All_Versions-E67E22?style=for-the-badge&logo=minecraft&logoColor=white)](https://papermc.io/)
 [![Java](https://img.shields.io/badge/Java-25%20%7C%2021%20%7C%2017-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT_Attribution-blue.svg?style=for-the-badge)](LICENSE)
 
-A powerful, all-in-one desktop application designed to create, configure, manage, and scale high-performance Minecraft Paper servers with zero terminal complexity.
+A powerful, all-in-one server application designed to create, configure, manage, and scale high-performance Minecraft Paper servers with zero terminal complexity — with PC Desktop and private Android Mobile editions synchronized via GitHub Data Center.
 
-[⬇️ Download Latest Release](https://github.com/JishnuTheGamer/jtg-craft/releases) • [✨ Features](#-features) • [💻 Getting Started](#-getting-started) • [⚙️ Requirements](#️-system-requirements) • [📄 License](#-license--credits)
+[⬇️ Download PC (.exe)](https://github.com/JishnuTheGamer/jtg-craft/releases) • [✨ Features](#-features) • [📱 Mobile Edition](#-jtg-craft-mobile-android) • [💻 Getting Started](#-getting-started) • [⚙️ Requirements](#️-system-requirements)
 
 </div>
 
@@ -72,8 +73,23 @@ A powerful, all-in-one desktop application designed to create, configure, manage
 
 ---
 
+---
+
+## 📱 Jtg-Craft Mobile (Android)
+
+Run a full Minecraft Java Server in your pocket! **Jtg-craft Mobile** brings the complete power of desktop server management to Android devices.
+
+### 🌟 Mobile Highlights:
+- **Direct ARM64 JRE Execution** — Runs real Minecraft Paper Java servers natively on your phone using portable Linux aarch64 runtime.
+- **Background Persistence** — Uses an integrated Foreground Service & CPU WakeLock so the server keeps running smoothly even when screen is locked or switching apps.
+- **Touch-Optimized UI** — Bottom navigation bar, adaptive layout, virtual keyboard optimization, and tap-friendly controls.
+- **Independent Updates** — PC and Mobile have dedicated, decoupled release channels (`update-check.json` for PC and `mobile/mobile-update-check.json` for Android).
+
+---
+
 ## ⚙️ System Requirements
 
+### 💻 Windows PC
 | Component | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10 (64-bit) | Windows 11 (64-bit) |
@@ -81,6 +97,15 @@ A powerful, all-in-one desktop application designed to create, configure, manage
 | **Memory (RAM)** | 4 GB | 8 GB or more |
 | **Storage** | 2 GB free disk space | SSD with 10 GB+ free space |
 | **Network** | Broadband internet connection | High-speed fiber connection |
+
+### 📱 Android Mobile
+| Component | Minimum | Recommended |
+| :--- | :--- | :--- |
+| **Operating System** | Android 6.0 (Marshmallow, API 23) | Android 10+ (64-bit) |
+| **Architecture** | ARM64 (aarch64) | ARM64 (aarch64) |
+| **Memory (RAM)** | 2 GB available RAM | 4 GB+ RAM |
+| **Storage** | 1.5 GB free storage | 4 GB+ free storage |
+| **Battery Setting** | Unrestricted / Allow Background | Don't Optimize / Keep Awake |
 
 ---
 

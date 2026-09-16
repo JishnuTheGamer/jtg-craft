@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "versionCode": 1000,
+  "releaseDate": "2026-09-13",
+  "channel": "mobile-production",
+  "updateMode": "data-center-ota",
+  "baseUrl": "https://raw.githubusercontent.com/JishnuTheGamer/jtg-craft/main/",
+  "minAndroidVersion": "6.0 (Marshmallow, API 23)",
+  "recommendedRam": "3GB+ (Minimum 2GB)",
+  "architecture": "arm64-v8a",
+  "files": [
+    "mobile/www/index.html",
+    "mobile/www/style.css",
+    "mobile/www/mobile-patches.css",
+    "mobile/www/mobile-bridge.js",
+    "mobile/www/renderer.js",
+    "mobile/mobile-update-check.json"
+  ],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "versionCode": 1000,
+      "date": "2026-09-13",
+      "type": "major",
+      "title": "Initial Mobile Release (Android APK) v1.0.0",
+      "changes": [
+        "Full Minecraft Java server management directly on Android phones (Android 6.0+)",
+        "Automated Adoptium Linux aarch64 ARM64 portable JRE manager & runtime",
+        "Background execution with persistent Foreground Service & CPU WakeLock to prevent server sleep",
+        "Responsive glassmorphism mobile UI with bottom navigation bar & touch gestures",
+        "Interactive Minecraft server console with virtual keyboard optimization",
+        "File Manager with batch operations, safe-guarding .mcmeta.json metadata",
+        "Full Modrinth plugin catalog browser & installer for mobile",
+        "World importer/exporter with ZIP compression support",
+        "Independent mobile update engine (separate from PC desktop releases)"
+      ]
+    }
+  ]
+}

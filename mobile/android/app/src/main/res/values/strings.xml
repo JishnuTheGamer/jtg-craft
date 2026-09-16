@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jtg-craft</string>
+    <string name="title_activity_main">Jtg-craft</string>
+    <string name="package_name">com.jtgcraft.mobile</string>
+    <string name="custom_url_scheme">com.jtgcraft.mobile</string>
+</resources>
