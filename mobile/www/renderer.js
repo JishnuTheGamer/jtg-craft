@@ -25,17 +25,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         target.classList.add('active');
     }
 
+    function openDrawer() {
+        const drawer = $('#mobile-sidebar-drawer');
+        const backdrop = $('#sidebar-backdrop');
+        if (drawer) drawer.classList.add('open');
+        if (backdrop) backdrop.classList.remove('hidden');
+    }
+
+    function closeDrawer() {
+        const drawer = $('#mobile-sidebar-drawer');
+        const backdrop = $('#sidebar-backdrop');
+        if (drawer) drawer.classList.remove('open');
+        if (backdrop) backdrop.classList.add('hidden');
+    }
+
     function showPanel(id) {
+        if (!id) return;
         $$('.panel').forEach(p => { p.classList.add('hidden'); p.classList.remove('active'); });
         $$('.nav-item').forEach(n => n.classList.remove('active'));
         const panel = document.getElementById(id);
-        panel.classList.remove('hidden');
-        panel.classList.add('active');
-        const nav = $(`.nav-item[data-panel="${id}"]`);
-        if (nav) nav.classList.add('active');
+        if (panel) {
+            panel.classList.remove('hidden');
+            panel.classList.add('active');
+        }
+        $$(`.nav-item[data-panel="${id}"]`).forEach(nav => nav.classList.add('active'));
         if (id === 'panel-settings') {
             loadChangelog();
+            loadSettings();
         }
+        closeDrawer();
     }
 
     function formatSize(bytes) {
@@ -104,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (check.exists) {
             // Jump straight to dashboard
             $('#sidebar-server-name').textContent = check.name;
+            const drName = $('#drawer-server-name');
+            if (drName) drName.textContent = check.name;
             initDashboard();
             showScreen('screen-dashboard');
         } else {
@@ -291,6 +311,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             toast('Server created successfully!');
             $('#sidebar-server-name').textContent = name;
+            const drName = $('#drawer-server-name');
+            if (drName) drName.textContent = name;
             initDashboard();
             showScreen('screen-dashboard');
 
@@ -309,10 +331,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     let statsInterval = null;
 
     function initDashboard() {
-        // Sidebar nav
+        // Drawer toggle and close controls
+        const btnToggle = $('#btn-sidebar-toggle');
+        if (btnToggle) btnToggle.onclick = () => openDrawer();
+
+        const btnClose = $('#btn-drawer-close');
+        if (btnClose) btnClose.onclick = () => closeDrawer();
+
+        const backdrop = $('#sidebar-backdrop');
+        if (backdrop) backdrop.onclick = () => closeDrawer();
+
+        // Sidebar & Bottom nav
         $$('.nav-item').forEach(item => {
             item.onclick = () => {
+                if (item.id === 'btn-bottom-menu' || item.classList.contains('nav-item-drawer')) {
+                    openDrawer();
+                    return;
+                }
                 const panel = item.dataset.panel;
+                if (!panel) return;
                 showPanel(panel);
                 // Lazy-load panel data
                 if (panel === 'panel-files')   loadFileManager('');
@@ -337,6 +374,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 $('#live-cpu').textContent = s.cpuPercent + '%';
                 $('#live-ram').textContent = `${s.ramUsedMB} / ${s.ramTotalMB} MB`;
                 $('#cpu-bar').style.width = s.cpuPercent + '%';
+
+                const drawerCpu = $('#drawer-live-cpu');
+                if (drawerCpu) drawerCpu.textContent = s.cpuPercent + '%';
+                const drawerRam = $('#drawer-live-ram');
+                if (drawerRam) drawerRam.textContent = `${s.ramUsedMB} / ${s.ramTotalMB} MB`;
             } catch (_) {}
         }, 3000);
     }
@@ -363,6 +405,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('#btn-restart').disabled = !running;
         $('#inp-cmd').disabled = !running;
         $('#btn-cmd').disabled = !running;
+
+        const dot = $('#drawer-status-dot');
+        const txt = $('#drawer-status-text');
+        if (dot) dot.classList.toggle('online', running);
+        if (txt) txt.textContent = running ? 'Server Running' : 'Server Stopped';
     });
 
     async function startServer() {
@@ -1074,6 +1121,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // Load Server Resources Config (.mcmeta.json)
+        try {
+            const cfg = await window.api.getServerConfig();
+            if (cfg) {
+                const inpName = $('#settings-inp-name');
+                const sldRam = $('#settings-sld-ram');
+                const lblRam = $('#settings-lbl-ram');
+                const sldCpu = $('#settings-sld-cpu');
+                const lblCpu = $('#settings-lbl-cpu');
+                const inpPath = $('#settings-inp-path');
+
+                if (inpName && cfg.name) inpName.value = cfg.name;
+                const ramVal = cfg.ramMB || cfg.ram || 2048;
+                if (sldRam) {
+                    sldRam.value = ramVal;
+                    if (lblRam) lblRam.textContent = ramVal;
+                }
+                const cpuVal = cfg.cpuCores || cfg.cpu || 2;
+                if (sldCpu) {
+                    sldCpu.value = cpuVal;
+                    if (lblCpu) lblCpu.textContent = cpuVal;
+                }
+                if (inpPath) {
+                    inpPath.value = cfg.path || savedDir || '';
+                }
+            }
+        } catch (_) {}
+
         // Load Java Settings
         try {
             const javaSettings = await window.api.getJavaSettings();
@@ -1090,6 +1165,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Load changelog
         loadChangelog();
+    }
+
+    // Setup Settings Resource Sliders and Save Button
+    const sldSettingsRam = $('#settings-sld-ram');
+    const sldSettingsCpu = $('#settings-sld-cpu');
+    if (sldSettingsRam) {
+        sldSettingsRam.max = ramMax;
+        const lblRamMax = $('#settings-lbl-ram-max');
+        if (lblRamMax) lblRamMax.textContent = (ramMax / 1024).toFixed(0) + ' GB';
+        sldSettingsRam.oninput = () => {
+            const lbl = $('#settings-lbl-ram');
+            if (lbl) lbl.textContent = sldSettingsRam.value;
+        };
+    }
+    if (sldSettingsCpu) {
+        sldSettingsCpu.max = cpuMax;
+        const lblCpuMax = $('#settings-lbl-cpu-max');
+        if (lblCpuMax) lblCpuMax.textContent = cpuMax;
+        sldSettingsCpu.oninput = () => {
+            const lbl = $('#settings-lbl-cpu');
+            if (lbl) lbl.textContent = sldSettingsCpu.value;
+        };
+    }
+
+    const btnSaveConfig = $('#btn-settings-save-config');
+    if (btnSaveConfig) {
+        btnSaveConfig.onclick = async () => {
+            const name = $('#settings-inp-name') ? $('#settings-inp-name').value.trim() : '';
+            const ramMB = $('#settings-sld-ram') ? parseInt($('#settings-sld-ram').value, 10) : 2048;
+            const cpuCores = $('#settings-sld-cpu') ? parseInt($('#settings-sld-cpu').value, 10) : 2;
+
+            btnSaveConfig.disabled = true;
+            try {
+                const res = await window.api.saveServerConfig({ name, ram: ramMB, ramMB, cpu: cpuCores, cpuCores });
+                if (res && res.success) {
+                    toast('Server settings saved successfully!');
+                    if (name) {
+                        const sbName = $('#sidebar-server-name');
+                        if (sbName) sbName.textContent = name;
+                        const drName = $('#drawer-server-name');
+                        if (drName) drName.textContent = name;
+                    }
+                } else {
+                    toast((res && res.error) || 'Failed to save settings', 'error');
+                }
+            } catch (e) {
+                toast(e.message || 'Failed to save settings', 'error');
+            } finally {
+                btnSaveConfig.disabled = false;
+            }
+        };
     }
 
     function showSettingsProgress(label) {

@@ -612,6 +612,14 @@
             if (ServerProcess.deleteServer) return ServerProcess.deleteServer();
             return Promise.resolve({ success: true });
         },
+        getServerConfig: async () => {
+            if (ServerProcess.getServerConfig) return await ServerProcess.getServerConfig();
+            return { path: '', name: 'Server', ram: 2048, cpu: 2, version: '1.21.11' };
+        },
+        saveServerConfig: async (config) => {
+            if (ServerProcess.saveServerConfig) return await ServerProcess.saveServerConfig(config);
+            return { success: true };
+        },
 
         serverStatus: async () => {
             try {

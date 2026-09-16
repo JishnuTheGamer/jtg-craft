@@ -381,6 +381,8 @@ public class ServerProcessPlugin extends Plugin {
                 File tmpDir = new File(getContext().getCacheDir(), "tmp");
                 if (!tmpDir.exists()) tmpDir.mkdirs();
 
+                File tagFix = ensureTagFixLibrary(getContext());
+
                 ProcessBuilder pb = new ProcessBuilder(
                         javaBin.getAbsolutePath(),
                         "-Xms256M",
@@ -409,8 +411,18 @@ public class ServerProcessPlugin extends Plugin {
 
                 java.util.Map<String, String> env = pb.environment();
                 env.put("JAVA_HOME", javaHome.getAbsolutePath());
-                String ldPath = jreLib.getAbsolutePath() + ":" + jreServer.getAbsolutePath() + ":" + jreJli.getAbsolutePath() + ":/system/lib64:/vendor/lib64";
-                env.put("LD_LIBRARY_PATH", ldPath);
+
+                StringBuilder ldPath = new StringBuilder();
+                if (tagFix != null && tagFix.exists()) {
+                    ldPath.append(tagFix.getParent()).append(":");
+                    env.put("LD_PRELOAD", tagFix.getAbsolutePath());
+                }
+                ldPath.append(jreLib.getAbsolutePath()).append(":")
+                      .append(jreServer.getAbsolutePath()).append(":")
+                      .append(jreJli.getAbsolutePath()).append(":")
+                      .append("/system/lib64:/vendor/lib64");
+
+                env.put("LD_LIBRARY_PATH", ldPath.toString());
                 env.put("PATH", javaBin.getParent() + ":/system/bin:/system/xbin");
 
                 JSObject launchMsg = new JSObject();
@@ -828,6 +840,113 @@ public class ServerProcessPlugin extends Plugin {
                     android.system.Os.chmod(p, 0755);
                 } catch (Throwable ignored) {}
             }
+        }
+    }
+
+    private File ensureTagFixLibrary(Context ctx) {
+        if (ctx == null) return null;
+        try {
+            if (ctx.getApplicationInfo() != null && ctx.getApplicationInfo().nativeLibraryDir != null) {
+                File nativeDirLib = new File(ctx.getApplicationInfo().nativeLibraryDir, "libtagfix.so");
+                if (nativeDirLib.exists() && nativeDirLib.canRead()) {
+                    return nativeDirLib;
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            File dest = new File(ctx.getFilesDir(), "libtagfix.so");
+            if (!dest.exists() || dest.length() < 1000) {
+                try (InputStream in = ctx.getAssets().open("libtagfix.so");
+                     OutputStream out = new FileOutputStream(dest)) {
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+                }
+            }
+            if (dest.exists()) {
+                dest.setExecutable(true, false);
+                dest.setReadable(true, false);
+                try {
+                    android.system.Os.chmod(dest.getAbsolutePath(), 0755);
+                } catch (Throwable ignored) {}
+                return dest;
+            }
+        } catch (Throwable ignored) {}
+
+        return null;
+    }
+
+    @PluginMethod
+    public void getServerConfig(PluginCall call) {
+        File sdir = getServerDir();
+        File meta = new File(sdir, ".mcmeta.json");
+        JSObject ret = new JSObject();
+        ret.put("path", sdir.getAbsolutePath());
+        ret.put("name", sdir.getName());
+        ret.put("ram", 2048);
+        ret.put("ramMB", 2048);
+        ret.put("cpu", 2);
+        ret.put("cpuCores", 2);
+        ret.put("version", "1.21.11");
+        if (meta.exists()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                StringBuilder sb = new StringBuilder();
+                String l;
+                while ((l = br.readLine()) != null) sb.append(l);
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                if (obj.has("name")) ret.put("name", obj.getString("name"));
+                if (obj.has("ram")) {
+                    int r = obj.getInt("ram");
+                    ret.put("ram", r);
+                    ret.put("ramMB", r);
+                }
+                if (obj.has("cpu")) {
+                    int c = obj.getInt("cpu");
+                    ret.put("cpu", c);
+                    ret.put("cpuCores", c);
+                }
+                if (obj.has("version")) ret.put("version", obj.getString("version"));
+            } catch (Exception ignored) {}
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void saveServerConfig(PluginCall call) {
+        File sdir = getServerDir();
+        File meta = new File(sdir, ".mcmeta.json");
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            if (meta.exists()) {
+                try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                    StringBuilder sb = new StringBuilder();
+                    String l;
+                    while ((l = br.readLine()) != null) sb.append(l);
+                    obj = new org.json.JSONObject(sb.toString());
+                } catch (Exception ignored) {}
+            }
+            if (call.hasOption("name")) {
+                obj.put("name", call.getString("name"));
+            }
+            if (call.hasOption("ram")) {
+                obj.put("ram", call.getInt("ram"));
+            } else if (call.hasOption("ramMB")) {
+                obj.put("ram", call.getInt("ramMB"));
+            }
+            if (call.hasOption("cpu")) {
+                obj.put("cpu", call.getInt("cpu"));
+            } else if (call.hasOption("cpuCores")) {
+                obj.put("cpu", call.getInt("cpuCores"));
+            }
+            try (FileWriter fw = new FileWriter(meta)) {
+                fw.write(obj.toString(2));
+            }
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to save config: " + e.getMessage());
         }
     }
 }

@@ -172,10 +172,223 @@ button,
     box-sizing: border-box !important;
 }
 
-.mobile-topbar-brand {
+.mobile-topbar-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+}
+
+.mobile-hamburger-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #e2e8f0 !important;
+    padding: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    border-radius: 8px !important;
+    margin-right: 4px !important;
+    touch-action: manipulation !important;
+    transition: background 0.15s, transform 0.1s !important;
+}
+.mobile-hamburger-btn:active {
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: scale(0.92) !important;
+}
+
+/* ── Sidebar Backdrop ────────────────────────────────────── */
+.sidebar-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+    z-index: 1000 !important;
+    opacity: 1 !important;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.sidebar-backdrop.hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    display: block !important;
+    visibility: hidden !important;
+}
+
+/* ── Left Sidebar Drawer (PC-Style Navigation) ───────────── */
+.mobile-sidebar-drawer {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 290px !important;
+    max-width: 82vw !important;
+    background: #0d121f !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.85) !important;
+    z-index: 1001 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.28s cubic-bezier(0.1, 0.9, 0.2, 1) !important;
+    box-sizing: border-box !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.mobile-sidebar-drawer.open {
+    transform: translateX(0) !important;
+}
+
+.drawer-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px 16px 12px 16px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+.drawer-brand {
     display: flex !important;
     align-items: center !important;
     gap: 10px !important;
+}
+.drawer-brand-text {
+    display: flex !important;
+    flex-direction: column !important;
+}
+.drawer-title {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #f8fafc !important;
+    line-height: 1.2 !important;
+}
+.drawer-subtitle {
+    font-size: 11px !important;
+    color: #94a3b8 !important;
+    line-height: 1.2 !important;
+}
+.drawer-close-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #94a3b8 !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+}
+.drawer-close-btn:active {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.drawer-status-card {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 12px 14px 6px 14px !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+}
+.drawer-status-dot {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    background: #ef4444 !important;
+}
+.drawer-status-dot.online {
+    background: #22c55e !important;
+    box-shadow: 0 0 8px #22c55e !important;
+}
+
+.drawer-nav {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 6px 10px !important;
+    margin: 0 !important;
+    list-style: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+.drawer-nav .nav-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    min-height: 48px !important;
+}
+.drawer-nav .nav-item:active {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+.drawer-nav .nav-item.active {
+    background: rgba(34, 197, 94, 0.12) !important;
+    border-color: rgba(34, 197, 94, 0.25) !important;
+    color: #4ade80 !important;
+}
+.drawer-nav .nav-item .nav-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: inherit !important;
+}
+.drawer-nav .nav-item .nav-meta {
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+}
+.drawer-nav .nav-item .nav-title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #f8fafc !important;
+    line-height: 1.2 !important;
+}
+.drawer-nav .nav-item.active .nav-title {
+    color: #4ade80 !important;
+}
+.drawer-nav .nav-item .nav-desc {
+    font-size: 10px !important;
+    color: #64748b !important;
+    margin-top: 2px !important;
+}
+
+.drawer-footer {
+    padding: 12px 16px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    font-size: 11px !important;
+    color: #64748b !important;
+}
+.drawer-stats {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+.drawer-stats .stat-line {
+    display: flex !important;
+    justify-content: space-between !important;
+}
+.drawer-stats .stat-line strong {
+    color: #4ade80 !important;
+}
+
+.mobile-topbar-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
     min-width: 0 !important;
 }
 
@@ -186,13 +399,13 @@ button,
 }
 
 .mobile-topbar-server {
-    font-size: 14px !important;
+    font-size: 13px !important;
     font-weight: 700 !important;
     color: #f8fafc !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 120px !important;
+    max-width: 105px !important;
     line-height: 1.2 !important;
 }
 
@@ -425,20 +638,14 @@ button,
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
+    justify-content: space-around !important;
     width: 100% !important;
     height: 100% !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding: 0 6px !important;
+    padding: 0 4px !important;
     margin: 0 !important;
     list-style: none !important;
-    gap: 4px !important;
-    scrollbar-width: none !important;
-}
-
-.mobile-bottombar .sidebar-nav::-webkit-scrollbar {
-    display: none !important;
+    gap: 0 !important;
+    overflow: hidden !important;
 }
 
 .mobile-bottombar .nav-item {
@@ -446,15 +653,23 @@ button,
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    flex: 0 0 auto !important;
-    min-width: 58px !important;
-    height: 48px !important;
-    padding: 4px 6px !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 52px !important;
+    padding: 4px 2px !important;
     margin: 0 !important;
     border-radius: 8px !important;
     cursor: pointer !important;
     color: #94a3b8 !important;
     transition: background 0.15s, color 0.15s !important;
+    touch-action: manipulation !important;
+}
+.mobile-bottombar .nav-item-drawer {
+    color: #38bdf8 !important;
+}
+.mobile-bottombar .nav-item-drawer:active {
+    background: rgba(56, 189, 248, 0.15) !important;
+}
 }
 
 .mobile-bottombar .nav-item:hover,

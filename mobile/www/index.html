@@ -135,13 +135,115 @@
 
 <!-- ═══════════ SCREEN: DASHBOARD ═══════════ -->
 <section id="screen-dashboard" class="screen dashboard-layout hidden">
+    <!-- Sidebar Drawer Backdrop Overlay -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+
+    <!-- Left Navigation Drawer (PC-Style Sidebar) -->
+    <aside id="mobile-sidebar-drawer" class="mobile-sidebar-drawer">
+        <div class="drawer-header">
+            <div class="drawer-brand">
+                <img src="assets/logo.png" style="width:28px;height:28px;border-radius:8px;">
+                <div class="drawer-brand-text">
+                    <span class="drawer-title">Jtg-Craft</span>
+                    <span id="drawer-server-name" class="drawer-subtitle">Server</span>
+                </div>
+            </div>
+            <button id="btn-drawer-close" class="drawer-close-btn" aria-label="Close menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="drawer-status-card">
+            <span id="drawer-status-dot" class="drawer-status-dot"></span>
+            <span id="drawer-status-text">Server Stopped</span>
+        </div>
+
+        <ul class="drawer-nav">
+            <li class="nav-item active" data-panel="panel-console">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Console</span>
+                    <span class="nav-desc">Terminal & live commands</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-files">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">File Manager</span>
+                    <span class="nav-desc">Configs, plugins & files</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-plugins">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Plugin Manager</span>
+                    <span class="nav-desc">Modrinth store & upload .jar</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-worlds">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">World Manager</span>
+                    <span class="nav-desc">Import, export & zip worlds</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-players">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Player Manager</span>
+                    <span class="nav-desc">OPs, whitelist & bans</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-props">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Server Properties</span>
+                    <span class="nav-desc">Port, MOTD, gamemode, PVP</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-backup">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Backups</span>
+                    <span class="nav-desc">Full snapshot restore</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-settings">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Server Settings</span>
+                    <span class="nav-desc">RAM, CPU, version, updates</span>
+                </div>
+            </li>
+            <li class="nav-item" data-panel="panel-playit">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg></span>
+                <div class="nav-meta">
+                    <span class="nav-title">Playit Tunnel</span>
+                    <span class="nav-desc">Free public domain tunnel</span>
+                </div>
+            </li>
+        </ul>
+
+        <div class="drawer-footer">
+            <div class="drawer-stats">
+                <div class="stat-line"><span>CPU Usage:</span> <strong id="drawer-live-cpu">0%</strong></div>
+                <div class="stat-line"><span>RAM Usage:</span> <strong id="drawer-live-ram">0 / 0 MB</strong></div>
+            </div>
+        </div>
+    </aside>
+
     <!-- Mobile Top Header Bar -->
     <header class="mobile-topbar">
-        <div class="mobile-topbar-brand">
-            <span class="sb-icon"><img src="assets/logo.png" style="width:24px;height:24px;border-radius:6px;"></span>
-            <div class="mobile-topbar-titles">
-                <span id="sidebar-server-name" class="mobile-topbar-server">Server</span>
-                <span class="mobile-topbar-badge"><span class="dot"></span>v1.0.3</span>
+        <div class="mobile-topbar-left">
+            <button id="btn-sidebar-toggle" class="mobile-hamburger-btn" aria-label="Open Navigation Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <div class="mobile-topbar-brand">
+                <span class="sb-icon"><img src="assets/logo.png" style="width:24px;height:24px;border-radius:6px;"></span>
+                <div class="mobile-topbar-titles">
+                    <span id="sidebar-server-name" class="mobile-topbar-server">Server</span>
+                    <span class="mobile-topbar-badge"><span class="dot"></span>v1.0.4</span>
+                </div>
             </div>
         </div>
 
@@ -332,6 +434,39 @@
             <h2 class="panel-title">Server Settings</h2>
             
             <div class="settings-grid">
+                <!-- Server Resources & Identity Configuration -->
+                <div class="settings-card server-config-card">
+                    <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></div>
+                    <div class="sc-content">
+                        <h3>Server Resources & Identity</h3>
+                        <p>Configure server display name, RAM allocation, and CPU cores.</p>
+                        
+                        <div class="field" style="margin-top: 12px;">
+                            <label>Server Name</label>
+                            <input type="text" id="settings-inp-name" class="prop-input" placeholder="Server Name" maxlength="32">
+                        </div>
+
+                        <div class="field" style="margin-top: 10px;">
+                            <label>RAM Allocation: <strong id="settings-lbl-ram" style="color:var(--accent,#22c55e);">2048</strong> MB</label>
+                            <input type="range" id="settings-sld-ram" min="1024" max="8192" step="256" value="2048">
+                            <div class="range-labels"><span>1 GB</span><span id="settings-lbl-ram-max">8 GB</span></div>
+                        </div>
+
+                        <div class="field" style="margin-top: 10px;">
+                            <label>CPU Cores: <strong id="settings-lbl-cpu" style="color:var(--accent,#22c55e);">2</strong></label>
+                            <input type="range" id="settings-sld-cpu" min="1" max="4" step="1" value="2">
+                            <div class="range-labels"><span>1</span><span id="settings-lbl-cpu-max">4</span></div>
+                        </div>
+
+                        <div class="field" style="margin-top: 10px;">
+                            <label>Active Server Directory</label>
+                            <input type="text" id="settings-inp-path" readonly class="prop-input" style="opacity: 0.7; font-size: 11px;">
+                        </div>
+
+                        <button id="btn-settings-save-config" class="btn primary" style="margin-top: 14px;">Save Configuration</button>
+                    </div>
+                </div>
+
                 <!-- Reinstall -->
                 <div class="settings-card">
                     <div class="sc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></div>
@@ -467,40 +602,24 @@
     <nav class="mobile-bottombar">
         <ul class="sidebar-nav">
             <li class="nav-item active" data-panel="panel-console">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span>
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span>
                 <span class="nav-label">Console</span>
             </li>
             <li class="nav-item" data-panel="panel-files">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
                 <span class="nav-label">Files</span>
             </li>
             <li class="nav-item" data-panel="panel-plugins">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg></span>
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg></span>
                 <span class="nav-label">Plugins</span>
             </li>
-            <li class="nav-item" data-panel="panel-worlds">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span>
-                <span class="nav-label">Worlds</span>
-            </li>
-            <li class="nav-item" data-panel="panel-players">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
-                <span class="nav-label">Players</span>
-            </li>
-            <li class="nav-item" data-panel="panel-props">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></span>
-                <span class="nav-label">Config</span>
-            </li>
-            <li class="nav-item" data-panel="panel-backup">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></span>
-                <span class="nav-label">Backups</span>
-            </li>
             <li class="nav-item" data-panel="panel-settings">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
                 <span class="nav-label">Settings</span>
             </li>
-            <li class="nav-item" data-panel="panel-playit">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg></span>
-                <span class="nav-label">Playit</span>
+            <li class="nav-item nav-item-drawer" id="btn-bottom-menu">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></span>
+                <span class="nav-label">Menu ☰</span>
             </li>
         </ul>
     </nav>
