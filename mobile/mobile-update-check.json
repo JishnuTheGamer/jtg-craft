@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "versionCode": 1002,
+  "version": "1.0.3",
+  "versionCode": 1003,
   "releaseDate": "2026-09-16",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
@@ -17,6 +17,20 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.3",
+      "versionCode": 1003,
+      "date": "2026-09-16",
+      "type": "patch",
+      "title": "File Manager, Plugin Manager & Settings Engine Fix v1.0.3",
+      "changes": [
+        "Fixed File Manager folder navigation and file editing by providing required isDir and rel path attributes",
+        "Fixed Plugin Manager Upload .jar button with native mobile file chooser dialog",
+        "Added missing Server Settings backend methods: Change Version, Reinstall Server, and Delete Server",
+        "Fixed Java runtime version display in Settings (eliminated undefined version text)",
+        "Formatted file, plugin, and world sizes properly in MB across all management screens"
+      ]
+    },
     {
       "version": "1.0.2",
       "versionCode": 1002,

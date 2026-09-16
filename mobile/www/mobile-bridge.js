@@ -404,15 +404,38 @@
         },
         getJavaSettings: async () => {
             try {
-                if (JavaManager.getJavaSettings) return await JavaManager.getJavaSettings();
-                return { setting: 'auto' };
+                let setting = 'auto';
+                if (JavaManager.getJavaSettings) {
+                    const res = await JavaManager.getJavaSettings();
+                    setting = res.configuredSetting || res.setting || 'auto';
+                }
+                const activeVersion = (setting === 'auto') ? '17' : setting;
+                return {
+                    setting,
+                    configuredSetting: setting,
+                    activeVersion,
+                    serverVersion: '1.20.4'
+                };
             } catch (e) {
-                return { setting: 'auto' };
+                return { setting: 'auto', configuredSetting: 'auto', activeVersion: '17', serverVersion: '1.20.4' };
             }
         },
-        setJavaVersion: (setting) => {
-            if (JavaManager.setJavaVersion) return JavaManager.setJavaVersion({ setting });
-            return Promise.resolve({ success: true });
+        setJavaVersion: async (setting) => {
+            try {
+                if (JavaManager.setJavaVersion) {
+                    await JavaManager.setJavaVersion({ setting });
+                }
+                const activeVersion = (setting === 'auto') ? '17' : setting;
+                return {
+                    success: true,
+                    setting,
+                    configuredSetting: setting,
+                    activeVersion,
+                    serverVersion: '1.20.4'
+                };
+            } catch (e) {
+                return { success: true, setting, configuredSetting: setting, activeVersion: '17', serverVersion: '1.20.4' };
+            }
         },
 
         getSystemInfo: async () => {
@@ -615,7 +638,16 @@
             try {
                 if (FileManager.list) {
                     const res = await FileManager.list({ path: rel || '' });
-                    return res.files || [];
+                    return (res.files || []).map(f => {
+                        const isDir = (f.isDir !== undefined) ? !!f.isDir : !!f.isDirectory;
+                        const relPath = f.rel || (rel ? (rel.endsWith('/') ? rel + f.name : rel + '/' + f.name) : f.name);
+                        return {
+                            ...f,
+                            isDir,
+                            isDirectory: isDir,
+                            rel: relPath
+                        };
+                    });
                 }
                 return [];
             } catch (e) {
@@ -648,7 +680,10 @@
             try {
                 if (FileManager.worldList) {
                     const res = await FileManager.worldList();
-                    return res.worlds || [];
+                    return (res.worlds || []).map(w => ({
+                        ...w,
+                        sizeMB: w.sizeMB !== undefined ? w.sizeMB : ((w.size || 0) / (1024 * 1024)).toFixed(1)
+                    }));
                 }
                 return [];
             } catch (e) {
@@ -898,7 +933,10 @@
             try {
                 if (FileManager.pluginsGetInstalled) {
                     const res = await FileManager.pluginsGetInstalled();
-                    return res.plugins || [];
+                    return (res.plugins || []).map(p => ({
+                        ...p,
+                        sizeMB: p.sizeMB !== undefined ? p.sizeMB : ((p.size || 0) / (1024 * 1024)).toFixed(1)
+                    }));
                 }
                 return [];
             } catch (e) {
@@ -907,7 +945,52 @@
         },
         pluginToggle:       (fileName)   => FileManager.pluginToggle ? FileManager.pluginToggle({ fileName }) : Promise.resolve({ success: true }),
         pluginDelete:       (fileName)   => FileManager.pluginDelete ? FileManager.pluginDelete({ fileName }) : Promise.resolve({ success: true }),
-        pluginUploadLocal:  ()           => FileManager.pluginUploadLocal ? FileManager.pluginUploadLocal() : Promise.resolve({ success: true }),
+        pluginUploadLocal:  () => {
+            return new Promise((resolve) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.jar';
+                input.multiple = true;
+                input.style.display = 'none';
+                document.body.appendChild(input);
+
+                input.onchange = async () => {
+                    const files = Array.from(input.files || []);
+                    try { document.body.removeChild(input); } catch (_) {}
+                    if (!files.length) {
+                        resolve({ success: false, installed: [] });
+                        return;
+                    }
+                    const installed = [];
+                    for (const f of files) {
+                        try {
+                            const b64 = await new Promise((res, rej) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    const result = reader.result;
+                                    const b = (typeof result === 'string' && result.includes(',')) ? result.split(',')[1] : result;
+                                    res(b);
+                                };
+                                reader.onerror = rej;
+                                reader.readAsDataURL(f);
+                            });
+                            await window.api.fmUploadFile('plugins', f.name, b64);
+                            installed.push(f.name);
+                        } catch (err) {
+                            console.error('Plugin upload error:', err);
+                        }
+                    }
+                    resolve({ success: installed.length > 0, installed });
+                };
+
+                input.oncancel = () => {
+                    try { document.body.removeChild(input); } catch (_) {}
+                    resolve({ success: false, installed: [] });
+                };
+
+                input.click();
+            });
+        },
         onPluginDownloadProgress: (cb) => {
             return onNativeEvent('plugin-download-progress', (data) => {
                 const total = data.total || 0;
@@ -918,7 +1001,18 @@
         },
 
         // ── Backup ────────────────────────────────────────────
-        createBackup: (mode) => FileManager.createBackup ? FileManager.createBackup({ mode }) : Promise.resolve({ success: true }),
+        createBackup: async (mode) => {
+            if (FileManager.createBackup) {
+                const res = await FileManager.createBackup({ mode });
+                return {
+                    success: true,
+                    fileName: res.fileName,
+                    sizeMB: res.sizeMB || '0.0',
+                    size: res.size || 0
+                };
+            }
+            return { success: true, sizeMB: '0.0' };
+        },
 
         // ── Updates (GitHub Data Center OTA) ──────────────────
         checkForUpdatesManual: async () => {

@@ -644,6 +644,172 @@ public class ServerProcessPlugin extends Plugin {
         return arr;
     }
 
+    @PluginMethod
+    public void changeVersion(PluginCall call) {
+        String newVer = call.getString("version", "1.20.4");
+        new Thread(() -> {
+            try {
+                if (isRunning && processInput != null) {
+                    try {
+                        processInput.write("stop\n");
+                        processInput.flush();
+                        if (serverProcess != null) serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (Exception ignored) {}
+                    isRunning = false;
+                }
+                File sdir = getServerDir();
+                File jar = new File(sdir, "paper.jar");
+                if (jar.exists()) jar.delete();
+
+                JSObject notify = new JSObject();
+                notify.put("step", "version");
+                notify.put("status", "Downloading Paper " + newVer + "...");
+                notify.put("percent", 20);
+                notifyListeners("setup-progress", notify);
+
+                String downloadJarUrl = getPaperDirectUrl(newVer);
+                URL u = new URL(downloadJarUrl);
+                HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+                conn.setInstanceFollowRedirects(true);
+                conn.connect();
+
+                long total = conn.getContentLengthLong();
+                try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(jar)) {
+                    byte[] buf = new byte[32768];
+                    int n;
+                    long downloaded = 0;
+                    long lastNotify = 0;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                        downloaded += n;
+                        long now = System.currentTimeMillis();
+                        if (now - lastNotify > 300) {
+                            lastNotify = now;
+                            int pct = total > 0 ? (int) ((downloaded * 100) / total) : 50;
+                            JSObject prog = new JSObject();
+                            prog.put("percent", pct);
+                            prog.put("status", "Downloading Paper " + newVer + " (" + pct + "%)...");
+                            notifyListeners("setup-progress", prog);
+                        }
+                    }
+                }
+                conn.disconnect();
+
+                File meta = new File(sdir, ".mcmeta.json");
+                org.json.JSONObject obj = new org.json.JSONObject();
+                if (meta.exists()) {
+                    try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                        StringBuilder sb = new StringBuilder();
+                        String l;
+                        while ((l = br.readLine()) != null) sb.append(l);
+                        obj = new org.json.JSONObject(sb.toString());
+                    } catch (Exception ignored) {}
+                }
+                obj.put("version", newVer);
+                try (FileWriter fw = new FileWriter(meta)) {
+                    fw.write(obj.toString());
+                }
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("version", newVer);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Failed to change version: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void reinstall(PluginCall call) {
+        new Thread(() -> {
+            try {
+                if (isRunning && processInput != null) {
+                    try {
+                        processInput.write("stop\n");
+                        processInput.flush();
+                        if (serverProcess != null) serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (Exception ignored) {}
+                    isRunning = false;
+                }
+                File sdir = getServerDir();
+                String ver = "1.20.4";
+                File meta = new File(sdir, ".mcmeta.json");
+                if (meta.exists()) {
+                    try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                        StringBuilder sb = new StringBuilder();
+                        String l;
+                        while ((l = br.readLine()) != null) sb.append(l);
+                        org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                        if (obj.has("version")) ver = obj.getString("version");
+                    } catch (Exception ignored) {}
+                }
+
+                File jar = new File(sdir, "paper.jar");
+                if (jar.exists()) jar.delete();
+
+                String downloadJarUrl = getPaperDirectUrl(ver);
+                URL u = new URL(downloadJarUrl);
+                HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+                conn.setInstanceFollowRedirects(true);
+                conn.connect();
+
+                try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(jar)) {
+                    byte[] buf = new byte[32768];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                    }
+                }
+                conn.disconnect();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Reinstall failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void deleteServer(PluginCall call) {
+        new Thread(() -> {
+            try {
+                if (isRunning && processInput != null) {
+                    try {
+                        processInput.write("stop\n");
+                        processInput.flush();
+                        if (serverProcess != null) serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (Exception ignored) {}
+                    isRunning = false;
+                }
+                File sdir = getServerDir();
+                deleteRecursive(sdir);
+                sdir.mkdirs();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Delete server failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void deleteRecursive(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] children = f.listFiles();
+            if (children != null) {
+                for (File c : children) deleteRecursive(c);
+            }
+        }
+        f.delete();
+    }
+
     private void setExecutableRecursive(File file) {
         if (file == null || !file.exists()) return;
         if (file.isDirectory()) {

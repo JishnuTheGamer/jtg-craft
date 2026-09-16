@@ -154,6 +154,9 @@ public class FileManagerPlugin extends Plugin {
                     JSObject item = new JSObject();
                     item.put("name", f.getName());
                     item.put("isDirectory", f.isDirectory());
+                    item.put("isDir", f.isDirectory());
+                    String relPath = (rel == null || rel.isEmpty()) ? f.getName() : (rel.endsWith("/") ? rel + f.getName() : rel + "/" + f.getName());
+                    item.put("rel", relPath);
                     item.put("size", f.isDirectory() ? 0 : f.length());
                     item.put("modified", sdf.format(new Date(f.lastModified())));
                     // System protection flag: .mcmeta.json is protected from deletion/rename
@@ -360,6 +363,8 @@ public class FileManagerPlugin extends Plugin {
                 JSObject ret = new JSObject();
                 ret.put("success", true);
                 ret.put("fileName", zipName);
+                ret.put("size", zipFile.length());
+                ret.put("sizeMB", String.format(Locale.US, "%.1f", zipFile.length() / (1024.0 * 1024.0)));
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("Failed to create backup: " + e.getMessage());
@@ -434,6 +439,7 @@ public class FileManagerPlugin extends Plugin {
                     p.put("name", j.getName().replace(".jar.disabled", "").replace(".jar", ""));
                     p.put("enabled", !j.getName().endsWith(".disabled"));
                     p.put("size", j.length());
+                    p.put("sizeMB", String.format(Locale.US, "%.1f", j.length() / (1024.0 * 1024.0)));
                     arr.put(p);
                 }
             }
@@ -486,7 +492,9 @@ public class FileManagerPlugin extends Plugin {
             if (wf.exists() && wf.isDirectory()) {
                 JSObject obj = new JSObject();
                 obj.put("name", w);
-                obj.put("size", getDirSize(wf));
+                long sz = getDirSize(wf);
+                obj.put("size", sz);
+                obj.put("sizeMB", String.format(Locale.US, "%.1f", sz / (1024.0 * 1024.0)));
                 arr.put(obj);
             }
         }

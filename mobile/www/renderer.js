@@ -844,7 +844,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 card.className = 'world-card';
                 card.innerHTML = `
                     <h4>${w.name}</h4>
-                    <div class="meta">Size: ${w.sizeMB} MB</div>
+                    <div class="meta">Size: ${w.sizeMB ? w.sizeMB + ' MB' : (w.size ? formatSize(w.size) : '0 MB')}</div>
                     <button class="btn danger sm" data-world="${w.name}">Delete World</button>
                 `;
                 card.querySelector('button').onclick = async () => {
@@ -1441,7 +1441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="installed-meta">
                             <span class="installed-name" title="${item.fileName}">${item.name}</span>
                             <div class="installed-details">
-                                <span>${item.sizeMB} MB</span>
+                                <span>${item.sizeMB ? item.sizeMB + ' MB' : (item.size ? formatSize(item.size) : '0 MB')}</span>
                                 <span>•</span>
                                 <span class="status-label" style="color: ${item.enabled ? 'var(--green-400)' : 'var(--text-3)'}">
                                     ${item.enabled ? 'Enabled' : 'Disabled'}
