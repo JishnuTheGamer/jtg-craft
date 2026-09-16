@@ -21,12 +21,34 @@ public class ServerProcessPlugin extends Plugin {
     private static boolean isRunning = false;
     private static long startTime = 0;
 
-    private File getServerDir() {
-        File serversRoot = new File(getContext().getFilesDir(), "servers");
+    public static final String PREFS_NAME = "jtg_server_prefs";
+    public static final String KEY_SERVER_DIR = "active_server_dir";
+
+    public static File getActiveServerDir(Context ctx) {
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String saved = prefs.getString(KEY_SERVER_DIR, null);
+        if (saved != null && !saved.trim().isEmpty()) {
+            File dir = new File(saved.trim());
+            if (!dir.exists()) dir.mkdirs();
+            return dir;
+        }
+        File serversRoot = new File(ctx.getFilesDir(), "servers");
         if (!serversRoot.exists()) serversRoot.mkdirs();
         File defaultServer = new File(serversRoot, "default");
         if (!defaultServer.exists()) defaultServer.mkdirs();
         return defaultServer;
+    }
+
+    public static void setActiveServerDir(Context ctx, String path) {
+        if (path == null || path.trim().isEmpty()) return;
+        File dir = new File(path.trim());
+        if (!dir.exists()) dir.mkdirs();
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_SERVER_DIR, dir.getAbsolutePath()).apply();
+    }
+
+    private File getServerDir() {
+        return getActiveServerDir(getContext());
     }
 
     private File getJavaBinary() {
@@ -64,6 +86,11 @@ public class ServerProcessPlugin extends Plugin {
     public void createServer(PluginCall call) {
         String version = call.getString("version", "1.20.4");
         String serverName = call.getString("name", "Jtg Server");
+        String customDir = call.getString("dir", null);
+        if (customDir != null && !customDir.trim().isEmpty()) {
+            setActiveServerDir(getContext(), customDir);
+        }
+        int ramMb = call.getInt("ram", 1024);
         new Thread(() -> {
             try {
                 File sdir = getServerDir();
@@ -89,6 +116,7 @@ public class ServerProcessPlugin extends Plugin {
                     JSObject obj = new JSObject();
                     obj.put("name", serverName);
                     obj.put("version", version);
+                    obj.put("ram", ramMb);
                     obj.put("created", System.currentTimeMillis());
                     obj.put("platform", "android");
                     fw.write(obj.toString());
@@ -308,11 +336,10 @@ public class ServerProcessPlugin extends Plugin {
             call.reject("Java runtime not found! Please run setup first.");
             return;
         }
-        javaBin.setExecutable(true, false);
 
         File paperJar = new File(sdir, "paper.jar");
         if (!paperJar.exists()) {
-            call.reject("paper.jar not found in server directory!");
+            call.reject("paper.jar not found in server directory: " + sdir.getAbsolutePath());
             return;
         }
 
@@ -322,14 +349,46 @@ public class ServerProcessPlugin extends Plugin {
             fw.write("eula=true\n");
         } catch (Exception ignored) {}
 
+        // Read RAM from metadata if available
+        int allocatedRam = 1024;
+        File meta = new File(sdir, ".mcmeta.json");
+        if (meta.exists()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                StringBuilder sb = new StringBuilder();
+                String l;
+                while ((l = br.readLine()) != null) sb.append(l);
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                if (obj.has("ram")) allocatedRam = obj.getInt("ram");
+            } catch (Exception ignored) {}
+        }
+        final int ram = Math.max(512, allocatedRam);
+
         new Thread(() -> {
             try {
-                // Adaptive RAM for mobile devices: 256MB initial, 1024MB max
+                // Setup Java runtime environment paths for mobile ARM64
+                File javaHome = javaBin.getParentFile();
+                if (javaHome != null && "bin".equals(javaHome.getName())) {
+                    javaHome = javaHome.getParentFile();
+                }
+                if (javaHome == null) javaHome = new File(getContext().getFilesDir(), "java");
+
+                // Ensure all binaries and .so libraries are executable
+                setExecutableRecursive(javaHome);
+                javaBin.setExecutable(true, false);
+                javaBin.setReadable(true, false);
+
+                // Setup writable tmpdir with exec permissions for Netty native libraries
+                File tmpDir = new File(getContext().getCacheDir(), "tmp");
+                if (!tmpDir.exists()) tmpDir.mkdirs();
+
                 ProcessBuilder pb = new ProcessBuilder(
                         javaBin.getAbsolutePath(),
                         "-Xms256M",
-                        "-Xmx1024M",
-                        "-XX:+UseG1GC",
+                        "-Xmx" + ram + "M",
+                        "-Djava.home=" + javaHome.getAbsolutePath(),
+                        "-Duser.home=" + sdir.getAbsolutePath(),
+                        "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(),
+                        "-Dpaper.disable-watchdog=true",
                         "-Dfile.encoding=UTF-8",
                         "-Dterminal.jline=false",
                         "-Dterminal.ansi=false",
@@ -340,24 +399,15 @@ public class ServerProcessPlugin extends Plugin {
                 pb.directory(sdir);
                 pb.redirectErrorStream(true);
 
-                // Setup Java runtime environment paths for mobile ARM64
-                File javaHome = javaBin.getParentFile();
-                if (javaHome != null && "bin".equals(javaHome.getName())) {
-                    javaHome = javaHome.getParentFile();
-                }
-                if (javaHome == null) javaHome = new File(getContext().getFilesDir(), "java");
-
                 File jreLib = new File(javaHome, "lib");
                 File jreServer = new File(jreLib, "server");
+                File jreJli = new File(jreLib, "jli");
 
                 java.util.Map<String, String> env = pb.environment();
                 env.put("JAVA_HOME", javaHome.getAbsolutePath());
-                String ldPath = jreLib.getAbsolutePath() + ":" + jreServer.getAbsolutePath() + ":/system/lib64:/vendor/lib64";
+                String ldPath = jreLib.getAbsolutePath() + ":" + jreServer.getAbsolutePath() + ":" + jreJli.getAbsolutePath() + ":/system/lib64:/vendor/lib64";
                 env.put("LD_LIBRARY_PATH", ldPath);
                 env.put("PATH", javaBin.getParent() + ":/system/bin:/system/xbin");
-
-                javaBin.setExecutable(true, false);
-                javaBin.setReadable(true, false);
 
                 serverProcess = pb.start();
                 processInput = new BufferedWriter(new OutputStreamWriter(serverProcess.getOutputStream()));
@@ -562,5 +612,23 @@ public class ServerProcessPlugin extends Plugin {
             }
         } catch (Exception ignored) {}
         return arr;
+    }
+
+    private void setExecutableRecursive(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            file.setExecutable(true, false);
+            file.setReadable(true, false);
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) setExecutableRecursive(child);
+            }
+        } else {
+            String p = file.getAbsolutePath();
+            if (p.contains("/bin/") || p.contains("\\bin\\") || p.endsWith(".so") || file.getName().equals("java")) {
+                file.setExecutable(true, false);
+                file.setReadable(true, false);
+            }
+        }
     }
 }

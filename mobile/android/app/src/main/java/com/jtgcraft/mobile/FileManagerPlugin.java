@@ -22,11 +22,7 @@ public class FileManagerPlugin extends Plugin {
     private static final String PROTECTED_FILE = ".mcmeta.json";
 
     public File getDefaultServerDir() {
-        File serversRoot = new File(getContext().getFilesDir(), "servers");
-        if (!serversRoot.exists()) serversRoot.mkdirs();
-        File defaultServer = new File(serversRoot, "default");
-        if (!defaultServer.exists()) defaultServer.mkdirs();
-        return defaultServer;
+        return ServerProcessPlugin.getActiveServerDir(getContext());
     }
 
     private File resolveSafePath(String relPath) {
@@ -55,6 +51,10 @@ public class FileManagerPlugin extends Plugin {
 
     @PluginMethod
     public void pickDirectory(PluginCall call) {
+        String customDir = call.getString("dir", null);
+        if (customDir != null && !customDir.trim().isEmpty()) {
+            ServerProcessPlugin.setActiveServerDir(getContext(), customDir);
+        }
         JSObject ret = new JSObject();
         ret.put("path", getDefaultServerDir().getAbsolutePath());
         call.resolve(ret);
@@ -62,8 +62,12 @@ public class FileManagerPlugin extends Plugin {
 
     @PluginMethod
     public void checkExistingServer(PluginCall call) {
-        File dir = getDefaultServerDir();
+        String targetPath = call.getString("dir", null);
+        File dir = (targetPath != null && !targetPath.trim().isEmpty()) ? new File(targetPath.trim()) : getDefaultServerDir();
         boolean exists = new File(dir, "server.properties").exists() || new File(dir, "paper.jar").exists() || new File(dir, ".mcmeta.json").exists();
+        if (exists && targetPath != null && !targetPath.trim().isEmpty()) {
+            ServerProcessPlugin.setActiveServerDir(getContext(), targetPath);
+        }
         JSObject ret = new JSObject();
         ret.put("exists", exists);
 
@@ -90,6 +94,37 @@ public class FileManagerPlugin extends Plugin {
         }
 
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void uploadFile(PluginCall call) {
+        try {
+            String rel = call.getString("path", "");
+            String name = call.getString("name", "");
+            String base64Data = call.getString("base64", "");
+
+            if (name == null || name.trim().isEmpty() || base64Data == null) {
+                call.reject("Missing file name or data");
+                return;
+            }
+
+            File targetDir = resolveSafePath(rel);
+            if (!targetDir.exists()) targetDir.mkdirs();
+
+            File outFile = new File(targetDir, name);
+            byte[] bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                fos.write(bytes);
+            }
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("name", name);
+            ret.put("size", outFile.length());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Upload failed: " + e.getMessage());
+        }
     }
 
     @PluginMethod

@@ -22,14 +22,15 @@
       "versionCode": 1001,
       "date": "2026-09-16",
       "type": "patch",
-      "title": "Mobile UI Overhaul & Safe Background Lifecycle v1.0.1",
+      "title": "Mobile Core Engine & UI Polish v1.0.1",
       "changes": [
-        "Fixed [object Object] console log formatting in the mobile terminal",
-        "Complete mobile dashboard overhaul: sleek topbar with live CPU/RAM stats & dedicated bottom navigation bar",
+        "Persistent OpenJDK runtime caching across app reinstalls (auto-detects local archive to avoid re-downloading)",
+        "Custom server install directory support with quick presets (App Storage, Downloads, Phone Storage) and folder browsing",
+        "Console server startup fix with Android-specific JVM flags, writable Netty JNI tmpdir, and watchdog disable",
+        "File Manager PC-style glassmorphic UI overhaul with always-visible touch actions (Rename, Delete, Extract)",
+        "Direct mobile file uploading for plugins, worlds, and configs using Base64 encoding",
         "Safe server shutdown on app swipe/destroy to prevent world corruption",
-        "Continuous background execution via persistent Android Foreground Service when minimized",
-        "Target SDK 28 execution permission fix for native OpenJDK binaries",
-        "Automated background update checks on app launch from GitHub repository"
+        "Continuous background execution via persistent Android Foreground Service with CPU WakeLock"
       ]
     },
     {

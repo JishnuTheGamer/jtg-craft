@@ -2,12 +2,14 @@ package com.jtgcraft.mobile;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Environment;
 import android.system.Os;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.tukaani.xz.XZInputStream;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -19,8 +21,35 @@ public class JavaManagerPlugin extends Plugin {
     private static final String PREFS_NAME = "jtg_java_prefs";
     private static final String KEY_JAVA_SETTING = "java_version_setting";
 
+    // Primary Android-native OpenJDK (ARM64 Bionic libc from PojavLauncher)
+    private static final String POJAV_JRE17_ARM64_URL = 
+        "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre17-ec28559/jre17-arm64-20210825-release.tar.xz";
+
     public File getJavaRootDir() {
-        return new File(getContext().getFilesDir(), "java");
+        File d = new File(getContext().getFilesDir(), "java");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    public static File getPersistentArchive() {
+        File[] candidates = new File[] {
+            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre17-android.tar.xz"),
+            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "jre17-android.tar.xz"),
+            new File("/storage/emulated/0/Download/JtgCraft/jre17-android.tar.xz"),
+            new File("/storage/emulated/0/Download/jre17-android.tar.xz"),
+            new File("/storage/emulated/0/JtgCraft/jre17-android.tar.xz"),
+            new File("/sdcard/Download/JtgCraft/jre17-android.tar.xz"),
+            new File("/sdcard/Download/jre17-android.tar.xz"),
+            new File("/sdcard/JtgCraft/jre17-android.tar.xz")
+        };
+        for (File f : candidates) {
+            try {
+                if (f != null && f.exists() && f.length() > 5000000) {
+                    return f;
+                }
+            } catch (Exception ignored) {}
+        }
+        return candidates[0];
     }
 
     public File getJavaBinary() {
@@ -35,7 +64,37 @@ public class JavaManagerPlugin extends Plugin {
                 if (nested.exists()) return nested;
             }
         }
+
+        // Check external PojavLauncher runtimes or persistent shared storage
+        try {
+            File[] externalPaths = new File[] {
+                new File("/storage/emulated/0/PojavLauncher/runtimes"),
+                new File("/sdcard/PojavLauncher/runtimes"),
+                new File(getContext().getExternalFilesDir(null), "java")
+            };
+            for (File ext : externalPaths) {
+                if (ext != null && ext.exists()) {
+                    File found = findJavaRecursively(ext, 3);
+                    if (found != null && found.exists()) return found;
+                }
+            }
+        } catch (Exception ignored) {}
+
         return direct;
+    }
+
+    private File findJavaRecursively(File dir, int depth) {
+        if (depth <= 0 || dir == null || !dir.exists()) return null;
+        File javaBin = new File(dir, "bin/java");
+        if (javaBin.exists()) return javaBin;
+        File[] children = dir.listFiles(File::isDirectory);
+        if (children != null) {
+            for (File c : children) {
+                File res = findJavaRecursively(c, depth - 1);
+                if (res != null) return res;
+            }
+        }
+        return null;
     }
 
     @PluginMethod
@@ -43,31 +102,38 @@ public class JavaManagerPlugin extends Plugin {
         try {
             File javaBin = getJavaBinary();
             if (javaBin.exists() && (javaBin.canExecute() || javaBin.setExecutable(true, false))) {
-                String ver = "21";
-                try {
-                    Process process = new ProcessBuilder(javaBin.getAbsolutePath(), "-version").redirectErrorStream(true).start();
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    String line = reader.readLine();
-                    process.waitFor();
-                    if (line != null) {
-                        if (line.contains("21.")) ver = "21";
-                        else if (line.contains("17.")) ver = "17";
-                        else if (line.contains("25.")) ver = "25";
-                    }
-                } catch (Exception ignored) {
-                    // On some Android SELinux policies, test-executing may fail during probe, but binary exists
-                }
-
                 JSObject ret = new JSObject();
                 ret.put("installed", true);
-                ret.put("version", ver);
+                ret.put("version", "17");
                 ret.put("path", javaBin.getAbsolutePath());
                 call.resolve(ret);
-            } else {
-                JSObject ret = new JSObject();
-                ret.put("installed", false);
-                call.resolve(ret);
+                return;
             }
+
+            // Check if persistent archive is cached on phone storage (e.g. after app reinstall)
+            File archive = getPersistentArchive();
+            if (archive != null && archive.exists() && archive.length() > 10000000) {
+                File javaDir = getJavaRootDir();
+                if (javaDir.exists()) deleteRecursive(javaDir);
+                javaDir.mkdirs();
+                extractArchive(archive, javaDir);
+                setExecutableRecursive(javaDir);
+
+                File recoveredBin = getJavaBinary();
+                if (recoveredBin.exists()) {
+                    recoveredBin.setExecutable(true, false);
+                    JSObject ret = new JSObject();
+                    ret.put("installed", true);
+                    ret.put("version", "17");
+                    ret.put("path", recoveredBin.getAbsolutePath());
+                    call.resolve(ret);
+                    return;
+                }
+            }
+
+            JSObject ret = new JSObject();
+            ret.put("installed", false);
+            call.resolve(ret);
         } catch (Exception e) {
             JSObject ret = new JSObject();
             ret.put("installed", false);
@@ -78,113 +144,135 @@ public class JavaManagerPlugin extends Plugin {
 
     @PluginMethod
     public void installJava(PluginCall call) {
-        String version = call.getString("version", "21");
+        String version = call.getString("version", "17");
         new Thread(() -> {
             HttpURLConnection conn = null;
             InputStream in = null;
             FileOutputStream out = null;
             try {
-                // Primary download URLs for ARM64 Linux JRE
-                String urlStr = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.2_13.tar.gz";
-                if ("17".equals(version)) {
-                    urlStr = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10%2B7/OpenJDK17U-jre_aarch64_linux_hotspot_17.0.10_7.tar.gz";
-                }
+                // First check if persistent archive already exists on phone storage!
+                File persistentArchive = getPersistentArchive();
+                File targetArchive;
 
-                URL currentUrl = new URL(urlStr);
-                int redirects = 0;
-                while (redirects < 6) {
-                    conn = (HttpURLConnection) currentUrl.openConnection();
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
-                    conn.setInstanceFollowRedirects(true);
-                    conn.setConnectTimeout(20000);
-                    conn.setReadTimeout(60000);
-                    conn.connect();
+                if (persistentArchive != null && persistentArchive.exists() && persistentArchive.length() > 10000000) {
+                    // Reuse local cached archive
+                    targetArchive = persistentArchive;
+                    JSObject notify = new JSObject();
+                    notify.put("step", "java");
+                    notify.put("status", "Found local cached Java archive! Extracting...");
+                    notify.put("percent", 70);
+                    notifyListeners("setup-progress", notify);
+                } else {
+                    // Download PojavLauncher Android OpenJDK ARM64
+                    String urlStr = POJAV_JRE17_ARM64_URL;
 
-                    int responseCode = conn.getResponseCode();
-                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || 
-                        responseCode == HttpURLConnection.HTTP_MOVED_TEMP || 
-                        responseCode == 307 || responseCode == 308) {
-                        String newLocation = conn.getHeaderField("Location");
-                        conn.disconnect();
-                        if (newLocation == null) break;
-                        currentUrl = new URL(newLocation);
-                        redirects++;
-                    } else {
-                        break;
+                    URL currentUrl = new URL(urlStr);
+                    int redirects = 0;
+                    while (redirects < 6) {
+                        conn = (HttpURLConnection) currentUrl.openConnection();
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+                        conn.setInstanceFollowRedirects(true);
+                        conn.setConnectTimeout(20000);
+                        conn.setReadTimeout(60000);
+                        conn.connect();
+
+                        int responseCode = conn.getResponseCode();
+                        if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || 
+                            responseCode == HttpURLConnection.HTTP_MOVED_TEMP || 
+                            responseCode == 307 || responseCode == 308) {
+                            String newLocation = conn.getHeaderField("Location");
+                            conn.disconnect();
+                            if (newLocation == null) break;
+                            currentUrl = new URL(newLocation);
+                            redirects++;
+                        } else {
+                            break;
+                        }
                     }
-                }
 
-                int code = conn.getResponseCode();
-                if (code != 200) {
-                    throw new IOException("HTTP " + code + " while downloading Java runtime");
-                }
-
-                long totalBytes = conn.getContentLengthLong();
-                in = conn.getInputStream();
-
-                File targetTarGz = new File(getContext().getCacheDir(), "jre-" + version + ".tar.gz");
-                out = new FileOutputStream(targetTarGz);
-
-                byte[] buf = new byte[32768];
-                int n;
-                long downloaded = 0;
-                long lastNotify = 0;
-
-                while ((n = in.read(buf)) != -1) {
-                    out.write(buf, 0, n);
-                    downloaded += n;
-                    long now = System.currentTimeMillis();
-                    if (now - lastNotify > 250) {
-                        lastNotify = now;
-                        int intPct = totalBytes > 0 ? (int) Math.min(80, (downloaded * 80L / totalBytes)) : 40;
-
-                        JSObject progress = new JSObject();
-                        progress.put("step", "java");
-                        progress.put("status", "Downloading Java " + version + " (" + intPct + "%)...");
-                        progress.put("percent", intPct);
-                        progress.put("downloaded", downloaded);
-                        progress.put("total", totalBytes);
-
-                        notifyListeners("setup-progress", progress);
-                        notifyListeners("java-download-progress", progress);
+                    int code = conn.getResponseCode();
+                    if (code != 200) {
+                        throw new IOException("HTTP " + code + " while downloading Java runtime");
                     }
-                }
-                out.flush();
-                out.close();
-                out = null;
-                in.close();
-                in = null;
 
-                if (targetTarGz.length() < 5000000) {
-                    throw new IOException("Downloaded archive is incomplete (" + targetTarGz.length() + " bytes)");
+                    long totalBytes = conn.getContentLengthLong();
+                    in = conn.getInputStream();
+
+                    targetArchive = new File(getContext().getCacheDir(), "jre-android.tar.xz");
+                    out = new FileOutputStream(targetArchive);
+
+                    byte[] buf = new byte[32768];
+                    int n;
+                    long downloaded = 0;
+                    long lastNotify = 0;
+
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                        downloaded += n;
+                        long now = System.currentTimeMillis();
+                        if (now - lastNotify > 250) {
+                            lastNotify = now;
+                            int intPct = totalBytes > 0 ? (int) Math.min(80, (downloaded * 80L / totalBytes)) : 40;
+
+                            JSObject progress = new JSObject();
+                            progress.put("step", "java");
+                            progress.put("status", "Downloading Java ARM64 (" + intPct + "%)...");
+                            progress.put("percent", intPct);
+                            progress.put("downloaded", downloaded);
+                            progress.put("total", totalBytes);
+
+                            notifyListeners("setup-progress", progress);
+                            notifyListeners("java-download-progress", progress);
+                        }
+                    }
+                    out.flush();
+                    out.close();
+                    out = null;
+                    in.close();
+                    in = null;
+
+                    if (targetArchive.length() < 5000000) {
+                        throw new IOException("Downloaded archive is incomplete (" + targetArchive.length() + " bytes)");
+                    }
+
+                    // Save persistent copy to phone storage for reinstalls
+                    try {
+                        File[] saveLocations = new File[] {
+                            new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre17-android.tar.xz"),
+                            new File("/storage/emulated/0/Download/JtgCraft/jre17-android.tar.xz"),
+                            new File("/sdcard/Download/JtgCraft/jre17-android.tar.xz")
+                        };
+                        for (File p : saveLocations) {
+                            try {
+                                File parent = p.getParentFile();
+                                if (parent != null && !parent.exists()) parent.mkdirs();
+                                copyFile(targetArchive, p);
+                            } catch (Exception ignored) {}
+                        }
+                    } catch (Exception ignored) {}
                 }
 
                 // Notify extracting
                 JSObject extractNotify = new JSObject();
                 extractNotify.put("step", "java");
-                extractNotify.put("status", "Extracting Java " + version + " runtime...");
+                extractNotify.put("status", "Extracting Android Java runtime...");
                 extractNotify.put("percent", 85);
                 notifyListeners("setup-progress", extractNotify);
                 notifyListeners("java-download-progress", extractNotify);
 
-                // Extract tar.gz into app files/java directory
                 File javaDir = getJavaRootDir();
                 if (javaDir.exists()) {
                     deleteRecursive(javaDir);
                 }
                 javaDir.mkdirs();
 
-                extractTarGz(targetTarGz, javaDir);
-
-                // Set executable permissions recursively
+                extractArchive(targetArchive, javaDir);
                 setExecutableRecursive(javaDir);
-
-                targetTarGz.delete();
 
                 // Notify finished
                 JSObject doneNotify = new JSObject();
                 doneNotify.put("step", "java");
-                doneNotify.put("status", "Installed successfully");
+                doneNotify.put("status", "Java 17 ARM64 Installed");
                 doneNotify.put("percent", 100);
                 notifyListeners("setup-progress", doneNotify);
                 notifyListeners("java-download-progress", doneNotify);
@@ -231,25 +319,27 @@ public class JavaManagerPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    private void extractTarGz(File tarGzFile, File destDir) throws Exception {
-        // Try native tar first if present
-        try {
-            Process p = new ProcessBuilder("tar", "-xzf", tarGzFile.getAbsolutePath(), "-C", destDir.getAbsolutePath()).start();
-            if (p.waitFor() == 0) {
-                return;
-            }
-        } catch (Exception ignored) {}
+    private void extractArchive(File archiveFile, File destDir) throws Exception {
+        InputStream raw = new FileInputStream(archiveFile);
+        InputStream decompressed;
+        if (archiveFile.getName().endsWith(".xz")) {
+            decompressed = new XZInputStream(raw);
+        } else {
+            decompressed = new GZIPInputStream(raw);
+        }
 
-        // Standalone robust pure-Java tar extractor
-        try (TarArchiveReader reader = new TarArchiveReader(new GZIPInputStream(new FileInputStream(tarGzFile)))) {
+        try (TarArchiveReader reader = new TarArchiveReader(decompressed)) {
             TarEntry entry;
             byte[] buffer = new byte[32768];
             while ((entry = reader.getNextEntry()) != null) {
                 String name = entry.getName();
-                // Skip header entries
                 if (name.startsWith("PaxHeaders.") || name.contains("@LongLink")) {
                     continue;
                 }
+                if (name.startsWith("./")) {
+                    name = name.substring(2);
+                }
+                if (name.isEmpty()) continue;
 
                 File destPath = new File(destDir, name);
                 if (entry.isDirectory()) {
@@ -260,7 +350,15 @@ public class JavaManagerPlugin extends Plugin {
                     try {
                         destPath.delete();
                         Os.symlink(entry.getLinkTarget(), destPath.getAbsolutePath());
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        try {
+                            File target = new File(entry.getLinkTarget());
+                            if (!target.isAbsolute() && parent != null) {
+                                target = new File(parent, entry.getLinkTarget());
+                            }
+                            if (target.exists()) copyFile(target, destPath);
+                        } catch (Exception ignored) {}
+                    }
                 } else {
                     File parent = destPath.getParentFile();
                     if (parent != null) parent.mkdirs();
@@ -272,11 +370,21 @@ public class JavaManagerPlugin extends Plugin {
                             remaining -= readChunk;
                         }
                     }
-                    if (name.contains("bin/") || name.endsWith(".so")) {
+                    if (name.contains("bin/") || name.endsWith(".so") || name.equals("java")) {
                         destPath.setExecutable(true, false);
                         destPath.setReadable(true, false);
                     }
                 }
+            }
+        }
+    }
+
+    private void copyFile(File src, File dst) throws IOException {
+        try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[32768];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
             }
         }
     }
@@ -317,7 +425,6 @@ public class JavaManagerPlugin extends Plugin {
         }
 
         public TarEntry getNextEntry() throws IOException {
-            // Discard any unread bytes of current entry + pad to 512 boundary
             if (bytesRemainingInEntry > 0) {
                 skipFully(bytesRemainingInEntry);
                 bytesRemainingInEntry = 0;
@@ -332,7 +439,6 @@ public class JavaManagerPlugin extends Plugin {
                     read += n;
                 }
 
-                // Check for EOF (two 512-byte zero blocks)
                 boolean allZero = true;
                 for (byte b : header) {
                     if (b != 0) { allZero = false; break; }
@@ -346,7 +452,6 @@ public class JavaManagerPlugin extends Plugin {
                 byte typeFlag = header[156];
                 String linkTarget = parseNullTerminatedString(header, 157, 100);
 
-                // GNU LongLink: entry content contains full path
                 if (typeFlag == 'L') {
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] tmp = new byte[512];
@@ -357,14 +462,12 @@ public class JavaManagerPlugin extends Plugin {
                         baos.write(tmp, 0, r);
                         remaining -= r;
                     }
-                    // Skip tar 512 padding for long link
                     long pad = (512 - (size % 512)) % 512;
                     skipFully(pad);
                     pendingLongName = baos.toString("UTF-8").trim().replace("\0", "");
                     continue;
                 }
 
-                // Align tar stream so that reader reads strictly `size` bytes, and then discards padding
                 long padding = (512 - (size % 512)) % 512;
                 bytesRemainingInEntry = size + padding;
 
@@ -445,4 +548,3 @@ public class JavaManagerPlugin extends Plugin {
         public String getLinkTarget() { return linkTarget; }
     }
 }
-

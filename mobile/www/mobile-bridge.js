@@ -189,10 +189,10 @@
         },
 
         // ── Setup & Directory Picker ──────────────────────────
-        pickDirectory: async () => {
+        pickDirectory: async (customDir) => {
             try {
                 if (FileManager.pickDirectory) {
-                    const res = await FileManager.pickDirectory();
+                    const res = await FileManager.pickDirectory({ dir: customDir || '' });
                     return res.path || '/data/data/com.jtgcraft.mobile/files/servers/default';
                 }
                 return '/data/data/com.jtgcraft.mobile/files/servers/default';
@@ -356,6 +356,7 @@
         fmRename:       (rel, name)  => FileManager.rename ? FileManager.rename({ path: rel, name }) : Promise.resolve({ success: true }),
         fmUpload:       (rel, paths) => FileManager.upload ? FileManager.upload({ path: rel, paths }) : Promise.resolve({ success: true }),
         fmUploadDialog: (rel)        => FileManager.uploadDialog ? FileManager.uploadDialog({ path: rel }) : Promise.resolve({ success: true }),
+        fmUploadFile:   (rel, name, base64) => FileManager.uploadFile ? FileManager.uploadFile({ path: rel, name, base64 }) : Promise.resolve({ success: true }),
         fmExtract:      (rel, name)  => FileManager.extract ? FileManager.extract({ path: rel, name }) : Promise.resolve({ success: true }),
         fmDeleteBatch:  (paths)      => FileManager.deleteBatch ? FileManager.deleteBatch({ paths }) : Promise.resolve({ success: true }),
         getPathForFile: (file)       => (file && file.name) ? file.name : '',

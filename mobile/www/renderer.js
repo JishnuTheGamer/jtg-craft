@@ -213,13 +213,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     //  CREATE SCREEN
     // ══════════════════════════════════════════════════════════
     $('#btn-pick-dir').onclick = async () => {
-        const dir = await window.api.pickDirectory();
-        if (dir) {
-            savedDir = dir;
-            localStorage.setItem('jtg-install-dir', savedDir);
-            $('#inp-dir').value = dir;
+        const currentVal = $('#inp-dir').value.trim() || savedDir || '/data/data/com.jtgcraft.mobile/files/servers/default';
+        const customPrompt = prompt('Enter or edit server install folder path:', currentVal);
+        if (customPrompt && customPrompt.trim()) {
+            const dir = await window.api.pickDirectory(customPrompt.trim());
+            if (dir) {
+                savedDir = dir;
+                localStorage.setItem('jtg-install-dir', savedDir);
+                $('#inp-dir').value = dir;
+            }
         }
     };
+
+    const inpDirEl = $('#inp-dir');
+    if (inpDirEl) {
+        inpDirEl.oninput = () => {
+            const val = inpDirEl.value.trim();
+            if (val) {
+                savedDir = val;
+                localStorage.setItem('jtg-install-dir', val);
+            }
+        };
+    }
+
+    $$('.dir-preset-chip').forEach(chip => {
+        chip.onclick = async () => {
+            $$('.dir-preset-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const chosen = chip.dataset.dir;
+            savedDir = chosen;
+            localStorage.setItem('jtg-install-dir', chosen);
+            $('#inp-dir').value = chosen;
+            if (window.api && window.api.pickDirectory) {
+                await window.api.pickDirectory(chosen);
+            }
+        };
+    });
 
     // Download progress
     window.api.onDownloadProgress(pct => {
@@ -704,40 +733,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Upload via Button
     const fileInput = $('#fm-file-input');
     $('#fm-upload-btn').onclick = async () => {
-        try {
-            const res = await window.api.fmUploadDialog(fmCurrentRel);
-            if (res && res.success) {
-                toast(`Uploaded ${res.count} file(s) successfully`, 'success');
-                loadFileManager(fmCurrentRel);
+        if (fileInput) {
+            fileInput.click();
+        } else {
+            try {
+                const res = await window.api.fmUploadDialog(fmCurrentRel);
+                if (res && res.success) {
+                    toast(`Uploaded ${res.count} file(s) successfully`, 'success');
+                    loadFileManager(fmCurrentRel);
+                }
+            } catch (e) {
+                toast('Upload failed: ' + e.message, 'error');
             }
-        } catch (e) {
-            toast('Upload failed: ' + e.message, 'error');
         }
     };
 
     if (fileInput) {
         fileInput.onchange = async () => {
             if (!fileInput.files || !fileInput.files.length) return;
-            const paths = [];
-            for (const f of fileInput.files) {
-                let p = '';
+            const files = Array.from(fileInput.files);
+            toast(`Uploading ${files.length} file(s)...`, 'info');
+            let successCount = 0;
+            for (const f of files) {
                 try {
-                    if (window.api && typeof window.api.getPathForFile === 'function') {
-                        p = window.api.getPathForFile(f);
-                    }
-                } catch (err) {}
-                if (!p && f.path) p = f.path;
-                if (p) paths.push(p);
-            }
-            if (paths.length) {
-                try {
-                    toast('Uploading file(s)...', 'info');
-                    await window.api.fmUpload(fmCurrentRel, paths);
-                    toast('Files uploaded successfully', 'success');
-                    loadFileManager(fmCurrentRel);
-                } catch (e) {
-                    toast('Upload failed: ' + e.message, 'error');
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const result = reader.result;
+                            const b64 = (typeof result === 'string' && result.includes(',')) ? result.split(',')[1] : result;
+                            resolve(b64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(f);
+                    });
+                    await window.api.fmUploadFile(fmCurrentRel, f.name, base64);
+                    successCount++;
+                } catch (err) {
+                    console.error('Failed to upload file ' + f.name, err);
                 }
+            }
+            if (successCount > 0) {
+                toast(`Uploaded ${successCount} file(s) successfully`, 'success');
+                loadFileManager(fmCurrentRel);
+            } else {
+                toast('Upload failed', 'error');
             }
             fileInput.value = ''; // reset
         };

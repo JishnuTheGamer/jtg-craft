@@ -88,8 +88,13 @@
         <div class="field">
             <label>Install Directory</label>
             <div class="field-row">
-                <input type="text" id="inp-dir" readonly placeholder="Choose a folder...">
+                <input type="text" id="inp-dir" placeholder="Enter or choose server folder...">
                 <button id="btn-pick-dir" class="btn secondary sm">Browse</button>
+            </div>
+            <div class="dir-presets">
+                <button type="button" class="dir-preset-chip active" data-dir="/data/data/com.jtgcraft.mobile/files/servers/default">⚡ App Storage (Fast &amp; Isolated)</button>
+                <button type="button" class="dir-preset-chip" data-dir="/storage/emulated/0/Download/JtgCraft/server">📁 Downloads (Easy Backup)</button>
+                <button type="button" class="dir-preset-chip" data-dir="/storage/emulated/0/JtgCraft/server">📱 Phone Storage</button>
             </div>
         </div>
 
@@ -186,22 +191,28 @@
 
         <!-- ── FILE MANAGER ── -->
         <div id="panel-files" class="panel hidden">
-            <div class="panel-header">
-                <h3>File Manager</h3>
-                <div class="breadcrumb" id="fm-breadcrumb" style="flex:1; margin-left: 12px;">
-                    <span class="crumb" data-rel="">/ root</span>
+            <div class="panel-header fm-panel-header">
+                <div class="fm-header-top">
+                    <h3>File Manager</h3>
+                    <div class="fm-top-actions">
+                        <input type="file" id="fm-file-input" multiple style="display: none;">
+                        <button id="fm-upload-btn" class="btn primary sm">Upload File(s)</button>
+                        <button id="fm-refresh-btn" class="btn outline sm" title="Refresh files">↻</button>
+                    </div>
                 </div>
-                <div class="fm-toolbar-actions">
-                    <label class="fm-select-all-label" id="fm-select-all-wrap" title="Select all items in current folder (.mcmeta.json is preserved)">
-                        <input type="checkbox" id="fm-select-all">
-                        <span>Select All</span>
-                    </label>
-                    <button id="fm-delete-selected-btn" class="btn danger sm hidden" title="Delete selected items">
-                        🗑 Delete Selected (<span id="fm-selected-count">0</span>)
-                    </button>
-                    <input type="file" id="fm-file-input" multiple style="display: none;">
-                    <button id="fm-upload-btn" class="btn primary sm">Upload File(s)</button>
-                    <button id="fm-refresh-btn" class="btn outline sm" title="Refresh files">↻</button>
+                <div class="fm-header-sub">
+                    <div class="breadcrumb" id="fm-breadcrumb">
+                        <span class="crumb" data-rel="">/ root</span>
+                    </div>
+                    <div class="fm-toolbar-actions">
+                        <label class="fm-select-all-label" id="fm-select-all-wrap" title="Select all items in current folder (.mcmeta.json is preserved)">
+                            <input type="checkbox" id="fm-select-all">
+                            <span>Select All</span>
+                        </label>
+                        <button id="fm-delete-selected-btn" class="btn danger sm hidden" title="Delete selected items">
+                            🗑 Delete Selected (<span id="fm-selected-count">0</span>)
+                        </button>
+                    </div>
                 </div>
             </div>
             <div id="fm-list" class="fm-list"></div>
