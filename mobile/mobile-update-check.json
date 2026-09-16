@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "versionCode": 1000,
-  "releaseDate": "2026-09-13",
+  "version": "1.0.1",
+  "versionCode": 1001,
+  "releaseDate": "2026-09-16",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
   "baseUrl": "https://raw.githubusercontent.com/JishnuTheGamer/jtg-craft/main/",
@@ -17,6 +17,21 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.1",
+      "versionCode": 1001,
+      "date": "2026-09-16",
+      "type": "patch",
+      "title": "Mobile UI Overhaul & Safe Background Lifecycle v1.0.1",
+      "changes": [
+        "Fixed [object Object] console log formatting in the mobile terminal",
+        "Complete mobile dashboard overhaul: sleek topbar with live CPU/RAM stats & dedicated bottom navigation bar",
+        "Safe server shutdown on app swipe/destroy to prevent world corruption",
+        "Continuous background execution via persistent Android Foreground Service when minimized",
+        "Target SDK 28 execution permission fix for native OpenJDK binaries",
+        "Automated background update checks on app launch from GitHub repository"
+      ]
+    },
     {
       "version": "1.0.0",
       "versionCode": 1000,

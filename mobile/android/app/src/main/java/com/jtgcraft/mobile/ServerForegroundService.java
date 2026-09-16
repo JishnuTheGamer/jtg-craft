@@ -75,6 +75,14 @@ public class ServerForegroundService extends Service {
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        // Safely send 'stop' to Minecraft server so world data isn't corrupted
+        ServerProcessPlugin.stopServerSafely();
+        stopSelf();
+    }
+
+    @Override
     public IBinder onBind(Intent intent) {
         return null;
     }

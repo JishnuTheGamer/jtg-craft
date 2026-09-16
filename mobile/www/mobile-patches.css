@@ -1,6 +1,6 @@
 /* ============================================================
    Jtg-craft Mobile — Responsive Patches
-   Touch-friendly overrides for Android devices
+   Touch-friendly overrides and mobile app layout for Android
    ============================================================ */
 
 /* ── Hide Electron-specific elements ─────────────────────── */
@@ -8,18 +8,26 @@
     display: none !important;
 }
 
-/* Reclaim the titlebar space */
-body {
-    padding-top: 0 !important;
-    /* Safe area for notch/punch-hole displays */
-    padding-top: env(safe-area-inset-top) !important;
-    padding-bottom: env(safe-area-inset-bottom) !important;
-    padding-left: env(safe-area-inset-left) !important;
-    padding-right: env(safe-area-inset-right) !important;
+/* ── Base Mobile Body ────────────────────────────────────── */
+html, body {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #0a0e1a;
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    overflow-x: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    padding-left: env(safe-area-inset-left, 0px) !important;
+    padding-right: env(safe-area-inset-right, 0px) !important;
 }
 
 /* ── Touch-friendly button sizes (min 44px) ──────────────── */
@@ -29,245 +37,560 @@ button,
 .tab-btn,
 .fm-toolbar button,
 .setup-step-header {
-    min-height: 44px !important;
-    min-width: 44px !important;
+    min-height: 44px;
     touch-action: manipulation;
 }
 
+.btn.sm {
+    min-height: 38px;
+    padding: 6px 12px;
+}
+
 .btn.primary.large {
-    min-height: 52px !important;
+    min-height: 50px !important;
     font-size: 16px !important;
-    padding: 14px 32px !important;
+    padding: 14px 28px !important;
 }
 
-/* ── Navigation — Bottom bar on mobile ───────────────────── */
-@media (max-width: 768px) {
-    .dashboard-layout {
-        flex-direction: column !important;
-        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
-    }
-
-    .sidebar {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        top: auto !important;
-        width: 100% !important;
-        height: auto !important;
-        flex-direction: row !important;
-        padding: 6px 8px env(safe-area-inset-bottom) !important;
-        z-index: 1000 !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-right: none !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        gap: 4px !important;
-        background: rgba(10, 14, 26, 0.95) !important;
-        backdrop-filter: blur(20px) !important;
-        -webkit-backdrop-filter: blur(20px) !important;
-    }
-
-    .sidebar .nav-item {
-        flex-direction: column !important;
-        font-size: 10px !important;
-        padding: 6px 10px !important;
-        min-width: 56px !important;
-        gap: 3px !important;
-        white-space: nowrap !important;
-        flex-shrink: 0 !important;
-    }
-
-    .sidebar .nav-item .nav-icon {
-        font-size: 18px !important;
-    }
-
-    .sidebar .nav-label {
-        font-size: 10px !important;
-    }
-
-    .content-area {
-        margin-left: 0 !important;
-        padding-bottom: 76px !important;
-        width: 100% !important;
-        height: 100% !important;
-        overflow-y: auto !important;
-    }
-
-    /* Server info header — stack vertically on mobile */
-    .server-info-header {
-        flex-direction: column !important;
-        gap: 12px !important;
-        align-items: stretch !important;
-    }
-
-    .server-info-header .server-controls {
-        flex-wrap: wrap !important;
-        gap: 8px !important;
-    }
-
-    .server-info-header .server-controls .btn {
-        flex: 1 1 auto !important;
-        min-width: 100px !important;
-    }
-
-    /* Console — full width */
-    .console-wrap {
-        max-height: 300px !important;
-    }
-
-    .console-input-row {
-        flex-direction: column !important;
-        gap: 8px !important;
-    }
-
-    .console-input-row input {
-        width: 100% !important;
-    }
-
-    /* Stats cards — 2 columns on mobile */
-    .stats-grid {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 8px !important;
-    }
-
-    /* Plugin cards — single column */
-    .plugin-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    /* File Manager */
-    .fm-toolbar {
-        flex-wrap: wrap !important;
-        gap: 6px !important;
-    }
-
-    .fm-table th,
-    .fm-table td {
-        padding: 10px 8px !important;
-        font-size: 13px !important;
-    }
-
-    /* Properties editor */
-    .props-table td {
-        display: block !important;
-        width: 100% !important;
-    }
-
-    .props-table td input {
-        width: 100% !important;
-    }
-
-    /* Welcome screen */
-    .welcome-wrap {
-        padding: 20px !important;
-    }
-
-    .welcome-title {
-        font-size: 24px !important;
-    }
-
-    /* Setup screen */
-    .setup-card {
-        margin: 12px !important;
-        padding: 16px !important;
-    }
-
-    /* World manager cards */
-    .world-card {
-        flex-direction: column !important;
-    }
-
-    .world-card .world-actions {
-        flex-wrap: wrap !important;
-        gap: 6px !important;
-    }
+/* ── Screens Layout ──────────────────────────────────────── */
+.screen {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
-/* ── Very small screens (< 400px) ────────────────────────── */
-@media (max-width: 400px) {
-    .stats-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    .sidebar .nav-item {
-        min-width: 48px !important;
-        padding: 4px 6px !important;
-        font-size: 9px !important;
-    }
+.screen.hidden {
+    display: none !important;
 }
 
-/* ── Scrollbar — hide on mobile (native scrolling) ───────── */
-::-webkit-scrollbar {
-    width: 4px !important;
-    height: 4px !important;
+.screen.active {
+    display: flex !important;
 }
 
-::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15) !important;
-    border-radius: 4px !important;
+/* Welcome Screen */
+#screen-welcome {
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
 }
 
-/* ── Mobile-specific toast positioning ───────────────────── */
+.welcome-wrap {
+    width: 100%;
+    max-width: 420px;
+    padding: 24px 20px;
+    text-align: center;
+}
+
+.welcome-title {
+    font-size: 26px !important;
+    letter-spacing: -0.5px;
+}
+
+.welcome-sub {
+    font-size: 13px !important;
+    margin-bottom: 24px !important;
+}
+
+/* Setup Screen */
+#screen-setup {
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.setup-card {
+    width: 100% !important;
+    max-width: 440px !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.setup-card h2 {
+    font-size: 20px !important;
+}
+
+/* Create Screen */
+#screen-create {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+}
+
+.create-card {
+    width: 100% !important;
+    max-width: 440px !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+}
+
+.create-card h2 {
+    font-size: 20px !important;
+    margin-bottom: 20px !important;
+}
+
+.create-card .field {
+    margin-bottom: 18px !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DASHBOARD MOBILE LAYOUT
+   ══════════════════════════════════════════════════════════════ */
+#screen-dashboard,
+.dashboard-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    position: relative !important;
+    background: #0a0e1a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ── Mobile Topbar ───────────────────────────────────────── */
+.mobile-topbar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0 14px !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    background: rgba(13, 17, 30, 0.96) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 100 !important;
+    box-sizing: border-box !important;
+}
+
+.mobile-topbar-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-width: 0 !important;
+}
+
+.mobile-topbar-titles {
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+}
+
+.mobile-topbar-server {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #f8fafc !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 120px !important;
+    line-height: 1.2 !important;
+}
+
+.mobile-topbar-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    color: #4ade80 !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+}
+
+.mobile-topbar-badge .dot {
+    width: 6px !important;
+    height: 6px !important;
+    background: #22c55e !important;
+    border-radius: 50% !important;
+    display: inline-block !important;
+}
+
+.mobile-topbar-stats {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+}
+
+.mobile-stat-chip {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 6px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    color: #94a3b8 !important;
+}
+
+.mobile-stat-chip .m-stat-name {
+    font-weight: 600 !important;
+    color: #64748b !important;
+    text-transform: uppercase !important;
+    font-size: 9px !important;
+}
+
+.mobile-stat-chip .m-stat-val {
+    color: #4ade80 !important;
+    font-weight: 700 !important;
+}
+
+.mobile-topbar-progress {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 2px !important;
+    background: transparent !important;
+    overflow: hidden !important;
+}
+
+.mobile-topbar-progress .stat-bar-fill {
+    height: 100% !important;
+    width: 0%;
+    background: linear-gradient(90deg, #22c55e, #06b6d4) !important;
+    transition: width 0.4s ease !important;
+}
+
+/* ── Updater UI (Dropdown Banner) ────────────────────────── */
+.updater-ui {
+    padding: 10px 14px !important;
+    background: rgba(34, 197, 94, 0.1) !important;
+    border-bottom: 1px solid rgba(34, 197, 94, 0.25) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
+    z-index: 90 !important;
+}
+
+.updater-ui.hidden {
+    display: none !important;
+}
+
+/* ── Main Content Area & Panels ──────────────────── */
+.dash-content {
+    flex: 1 1 auto !important;
+    position: relative !important;
+    width: 100% !important;
+    height: calc(100% - 52px - 60px) !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.panel {
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 12px 14px 14px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.panel.hidden {
+    display: none !important;
+}
+
+.panel.active {
+    display: flex !important;
+    opacity: 1 !important;
+    transform: none !important;
+    z-index: 5 !important;
+}
+
+.panel-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-bottom: 10px !important;
+    flex-shrink: 0 !important;
+    gap: 8px !important;
+}
+
+.panel-header h3 {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #fff !important;
+}
+
+.panel-header h3::after {
+    display: none !important;
+}
+
+.panel-header .btn-group {
+    display: flex !important;
+    gap: 6px !important;
+}
+
+.panel-header .btn-group .btn {
+    min-height: 38px !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+
+/* ── Console Panel Specifics ─────────────────────────────── */
+#panel-console {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+}
+
+#console-log {
+    flex: 1 1 auto !important;
+    min-height: 150px !important;
+    max-height: none !important;
+    height: auto !important;
+    margin-bottom: 8px !important;
+    border-radius: 10px !important;
+    background: #060911 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 12px !important;
+    font-family: 'JetBrains Mono', 'Consolas', monospace !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+    color: #e2e8f0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+    box-sizing: border-box !important;
+}
+
+.cmd-bar {
+    display: flex !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    padding-bottom: 2px !important;
+}
+
+.cmd-bar input {
+    height: 42px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    padding: 0 12px !important;
+    flex: 1 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+}
+
+.cmd-bar button {
+    height: 42px !important;
+    min-width: 64px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+/* ── Mobile Bottom Navigation Bar ────────────────────────── */
+.mobile-bottombar {
+    position: relative !important;
+    flex-shrink: 0 !important;
+    height: 60px !important;
+    min-height: 60px !important;
+    background: rgba(11, 15, 27, 0.98) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    z-index: 100 !important;
+    display: flex !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+
+.mobile-bottombar .sidebar-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 0 6px !important;
+    margin: 0 !important;
+    list-style: none !important;
+    gap: 4px !important;
+    scrollbar-width: none !important;
+}
+
+.mobile-bottombar .sidebar-nav::-webkit-scrollbar {
+    display: none !important;
+}
+
+.mobile-bottombar .nav-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    min-width: 58px !important;
+    height: 48px !important;
+    padding: 4px 6px !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    color: #94a3b8 !important;
+    transition: background 0.15s, color 0.15s !important;
+}
+
+.mobile-bottombar .nav-item:hover,
+.mobile-bottombar .nav-item:active {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.mobile-bottombar .nav-item.active {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #22c55e !important;
+}
+
+.mobile-bottombar .nav-item.active::before {
+    display: none !important;
+}
+
+.mobile-bottombar .nav-item .nav-icon {
+    width: 20px !important;
+    height: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.mobile-bottombar .nav-item .nav-icon svg {
+    width: 18px !important;
+    height: 18px !important;
+}
+
+.mobile-bottombar .nav-item .nav-label {
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+}
+
+.mobile-bottombar .beta-badge {
+    display: none !important;
+}
+
+/* ── Panels Responsive Styles ────────────────────────────── */
+
+/* File Manager */
+.fm-toolbar-actions {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+}
+
+.fm-list {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+}
+
+.fm-row {
+    padding: 10px 12px !important;
+    min-height: 44px !important;
+}
+
+.fm-editor-wrap {
+    position: fixed !important;
+    inset: 10px !important;
+    z-index: 500 !important;
+    background: #0f172a !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.7) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 14px !important;
+}
+
+.fm-editor-wrap textarea {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 250px !important;
+    font-family: monospace !important;
+    font-size: 12px !important;
+}
+
+/* Plugins */
+.plugin-filter-bar {
+    margin-bottom: 12px !important;
+}
+
+.plugin-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+}
+
+.plugin-chips {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 6px !important;
+}
+
+.plugin-chips .chip {
+    flex-shrink: 0 !important;
+}
+
+/* Worlds */
+.card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+}
+
+/* Settings */
+.settings-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+}
+
+/* ── Toast Container ─────────────────────────────────────── */
 #toast-container {
-    bottom: 80px !important;
-    right: 12px !important;
-    left: 12px !important;
+    position: fixed !important;
+    bottom: 70px !important;
+    right: 14px !important;
+    left: 14px !important;
     width: auto !important;
+    z-index: 9999 !important;
+    pointer-events: none !important;
 }
 
 .toast {
+    pointer-events: auto !important;
     width: 100% !important;
     max-width: none !important;
     font-size: 13px !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
 }
 
-/* ── Prevent text selection on interactive elements ──────── */
-.nav-item,
-.btn,
-button,
-.tab-btn,
-.fm-row,
-.plugin-card,
-.world-card {
-    -webkit-user-select: none !important;
-    user-select: none !important;
-}
-
-/* ── Allow text selection in editor and console ──────────── */
+/* ── Prevent text selection except inside console and editor ── */
 .fm-editor textarea,
-.console-output,
-.console-input-row input {
+#console-log,
+input,
+textarea {
     -webkit-user-select: text !important;
     user-select: text !important;
-}
-
-/* ── Mobile RAM warning ──────────────────────────────────── */
-.mobile-ram-warning {
-    background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 53, 53, 0.1));
-    border: 1px solid rgba(255, 107, 53, 0.3);
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin: 12px 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    color: #ff9f6b;
-}
-
-.mobile-ram-warning .warning-icon {
-    font-size: 24px;
-    flex-shrink: 0;
-}
-
-/* ── Status bar color blend ──────────────────────────────── */
-.status-bar-blend {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: env(safe-area-inset-top);
-    background: rgba(10, 14, 26, 0.98);
-    z-index: 9999;
 }

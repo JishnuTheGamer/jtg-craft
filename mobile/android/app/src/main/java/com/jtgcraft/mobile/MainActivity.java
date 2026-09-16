@@ -12,4 +12,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SystemInfoPlugin.class);
         super.onCreate(savedInstanceState);
     }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (isFinishing()) {
+            ServerProcessPlugin.stopServerSafely();
+        }
+    }
 }

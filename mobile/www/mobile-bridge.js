@@ -419,17 +419,18 @@
                 const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
                 const remote = await resp.json();
                 const local = await window.api.getAppVersion();
-                if (isNewerVersion(remote.version, local)) {
-                    return {
-                        available: true,
-                        version: remote.version,
-                        downloadUrl: MOBILE_GITHUB_CONFIG.releasesUrl,
-                        changelog: remote.changelog
-                    };
-                }
-                return { available: false };
+                const hasUpdate = isNewerVersion(remote.version, local);
+                return {
+                    updateAvailable: hasUpdate,
+                    available: hasUpdate,
+                    version: remote.version,
+                    versionCode: remote.versionCode || 1000,
+                    downloadUrl: MOBILE_GITHUB_CONFIG.releasesUrl,
+                    changelog: remote.changelog,
+                    files: remote.files || []
+                };
             } catch (e) {
-                return { available: false, error: e.message };
+                return { updateAvailable: false, available: false, error: e.message };
             }
         },
         getUpdateChangelog: async () => {
@@ -489,7 +490,10 @@
 
         // ── Events (Native → JS) ──────────────────────────────
         onDownloadProgress: (cb) => onNativeEvent('download-progress', cb),
-        onConsoleData:      (cb) => onNativeEvent('console-data', cb),
+        onConsoleData:      (cb) => onNativeEvent('console-data', (data) => {
+            const text = (typeof data === 'object' && data !== null && data.text !== undefined) ? data.text : data;
+            cb(text);
+        }),
         onPlayitConsoleData:(cb) => {},
         onServerState:      (cb) => onNativeEvent('server-state', cb),
         onBackupProgress:   (cb) => onNativeEvent('backup-progress', cb),

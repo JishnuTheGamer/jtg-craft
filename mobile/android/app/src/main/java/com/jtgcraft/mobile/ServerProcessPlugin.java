@@ -324,18 +324,40 @@ public class ServerProcessPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                // Adaptive RAM for mobile devices: 512MB initial, 1024MB max
+                // Adaptive RAM for mobile devices: 256MB initial, 1024MB max
                 ProcessBuilder pb = new ProcessBuilder(
                         javaBin.getAbsolutePath(),
-                        "-Xms384M",
+                        "-Xms256M",
                         "-Xmx1024M",
                         "-XX:+UseG1GC",
+                        "-Dfile.encoding=UTF-8",
+                        "-Dterminal.jline=false",
+                        "-Dterminal.ansi=false",
                         "-jar",
                         paperJar.getAbsolutePath(),
                         "--nogui"
                 );
                 pb.directory(sdir);
                 pb.redirectErrorStream(true);
+
+                // Setup Java runtime environment paths for mobile ARM64
+                File javaHome = javaBin.getParentFile();
+                if (javaHome != null && "bin".equals(javaHome.getName())) {
+                    javaHome = javaHome.getParentFile();
+                }
+                if (javaHome == null) javaHome = new File(getContext().getFilesDir(), "java");
+
+                File jreLib = new File(javaHome, "lib");
+                File jreServer = new File(jreLib, "server");
+
+                java.util.Map<String, String> env = pb.environment();
+                env.put("JAVA_HOME", javaHome.getAbsolutePath());
+                String ldPath = jreLib.getAbsolutePath() + ":" + jreServer.getAbsolutePath() + ":/system/lib64:/vendor/lib64";
+                env.put("LD_LIBRARY_PATH", ldPath);
+                env.put("PATH", javaBin.getParent() + ":/system/bin:/system/xbin");
+
+                javaBin.setExecutable(true, false);
+                javaBin.setReadable(true, false);
 
                 serverProcess = pb.start();
                 processInput = new BufferedWriter(new OutputStreamWriter(serverProcess.getOutputStream()));
@@ -407,6 +429,22 @@ public class ServerProcessPlugin extends Plugin {
             call.resolve(res);
         } catch (Exception e) {
             call.reject("Failed to stop server: " + e.getMessage());
+        }
+    }
+
+    public static void stopServerSafely() {
+        if (isRunning && processInput != null) {
+            try {
+                processInput.write("stop\n");
+                processInput.flush();
+                if (serverProcess != null) {
+                    new Thread(() -> {
+                        try {
+                            serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (Exception ignored) {}
+                    }).start();
+                }
+            } catch (Exception ignored) {}
         }
     }
 

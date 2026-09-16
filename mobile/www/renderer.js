@@ -316,7 +316,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const consoleEl = $('#console-log');
 
     function appendConsole(text) {
-        consoleEl.textContent += text;
+        const str = (typeof text === 'object' && text !== null) ? (text.text || JSON.stringify(text)) : String(text);
+        consoleEl.textContent += str;
         consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
@@ -1619,4 +1620,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             toast(`Jtg-Craft v${updateInfo.version} is available! Open Settings to update.`);
         });
     }
+
+    // Automatic background update check on app launch
+    setTimeout(async () => {
+        try {
+            if (window.api && window.api.checkForUpdatesManual) {
+                const res = await window.api.checkForUpdatesManual();
+                if (res && res.updateAvailable) {
+                    activeUpdateInfo = res;
+                    if (badgePill) {
+                        badgePill.className = 'badge-pill update-ready';
+                        badgePill.textContent = `● Update Available: v${res.version}`;
+                    }
+                    if (btnDownloadUpdate) btnDownloadUpdate.classList.remove('hidden');
+                    toast(`Update v${res.version} is available! Go to Settings to install.`);
+                }
+            }
+        } catch (_) {}
+    }, 2500);
 });
