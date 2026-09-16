@@ -372,7 +372,10 @@ public class FileManagerPlugin extends Plugin {
     public void pluginInstall(PluginCall call) {
         new Thread(() -> {
             try {
-                String downloadUrl = call.getString("url", "");
+                String downloadUrl = call.getString("downloadUrl", "");
+                if (downloadUrl == null || downloadUrl.isEmpty()) {
+                    downloadUrl = call.getString("url", "");
+                }
                 String fileName = call.getString("fileName", "plugin.jar");
                 File pluginsDir = new File(getDefaultServerDir(), "plugins");
                 if (!pluginsDir.exists()) pluginsDir.mkdirs();
@@ -400,6 +403,8 @@ public class FileManagerPlugin extends Plugin {
                             prog.put("fileName", fileName);
                             prog.put("downloaded", downloaded);
                             prog.put("total", totalBytes);
+                            int pct = totalBytes > 0 ? (int) ((downloaded * 100) / totalBytes) : 0;
+                            prog.put("pct", pct);
                             notifyListeners("plugin-download-progress", prog);
                         }
                     }

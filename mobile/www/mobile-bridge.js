@@ -50,6 +50,288 @@
         return false;
     }
 
+    // ── Curated Top Minecraft Plugins Catalog ───────────────────
+    const CURATED_PLUGINS = [
+        {
+            id: "viaversion",
+            slug: "viaversion",
+            title: "ViaVersion",
+            author: "FlorianMichael",
+            description: "Allows newer Minecraft client versions to connect to older server versions seamlessly.",
+            icon_url: "https://cdn.modrinth.com/data/P1OZGk5p/ad14260a7308dc9e4c3385f3f6b5bdabfe17f295_96.webp",
+            downloads: 12500000,
+            categories: ["utility", "management"],
+            defaultFileName: "ViaVersion.jar"
+        },
+        {
+            id: "viabackwards",
+            slug: "viabackwards",
+            title: "ViaBackwards",
+            author: "FlorianMichael",
+            description: "Allows older Minecraft client versions to connect to newer server versions.",
+            icon_url: "https://cdn.modrinth.com/data/spvEWuz4/c30ec7bf771be79b7692b1b427771765c9288e15_96.webp",
+            downloads: 8900000,
+            categories: ["utility", "management"],
+            defaultFileName: "ViaBackwards.jar"
+        },
+        {
+            id: "viarewind",
+            slug: "viarewind",
+            title: "ViaRewind",
+            author: "ViaVersion",
+            description: "ViaVersion addon enabling 1.8.x and 1.7.x clients to connect to newer server versions.",
+            icon_url: "https://cdn.modrinth.com/data/TbHIxhx5/f59ffe031387b06a9b1efa736dbbb4db44284574_96.webp",
+            downloads: 620000,
+            categories: ["utility", "management"],
+            defaultFileName: "ViaRewind.jar"
+        },
+        {
+            id: "luckperms",
+            slug: "luckperms",
+            title: "LuckPerms",
+            author: "Luck",
+            description: "An advanced, high performance permissions management plugin with a powerful web editor.",
+            icon_url: "https://cdn.modrinth.com/data/Vebnzrzj/icon.png",
+            downloads: 11200000,
+            categories: ["administration", "security"],
+            defaultFileName: "LuckPerms.jar"
+        },
+        {
+            id: "essentialsx",
+            slug: "essentialsx",
+            title: "EssentialsX",
+            author: "EssentialsX Team",
+            description: "The essential plugin suite for Minecraft servers, providing /home, /spawn, economy, warps and 100+ commands.",
+            icon_url: "https://cdn.modrinth.com/data/O0JyUcuU/icon.png",
+            downloads: 15400000,
+            categories: ["utility", "economy", "administration"],
+            defaultFileName: "EssentialsX.jar"
+        },
+        {
+            id: "geyser",
+            slug: "geyser",
+            title: "Geyser",
+            author: "GeyserMC",
+            description: "A bridge/proxy enabling Minecraft Bedrock Edition players to join your Java Edition server.",
+            icon_url: "https://cdn.modrinth.com/data/wKkoqHrH/icon.png",
+            downloads: 7800000,
+            categories: ["utility", "network"],
+            directDownload: "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot",
+            defaultFileName: "Geyser-Spigot.jar"
+        },
+        {
+            id: "floodgate",
+            slug: "floodgate",
+            title: "Floodgate",
+            author: "GeyserMC",
+            description: "Allows Bedrock players to join without needing a Java Edition account (pairs with Geyser).",
+            icon_url: "https://cdn.modrinth.com/data/bWrNNfkb/icon.png",
+            downloads: 5600000,
+            categories: ["utility", "security"],
+            directDownload: "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot",
+            defaultFileName: "floodgate-spigot.jar"
+        },
+        {
+            id: "worldedit",
+            slug: "worldedit",
+            title: "WorldEdit",
+            author: "EngineHub",
+            description: "In-game Minecraft map editor. Fast block manipulation, schematics, terraforming, and brush tools.",
+            icon_url: "https://cdn.modrinth.com/data/1e2GlzzA/icon.png",
+            downloads: 14200000,
+            categories: ["world", "creative"],
+            defaultFileName: "worldedit-bukkit.jar"
+        },
+        {
+            id: "worldguard",
+            slug: "worldguard",
+            title: "WorldGuard",
+            author: "EngineHub",
+            description: "Protect regions, prevent fires, disable creeper damage, and manage land ownership flags.",
+            icon_url: "https://cdn.modrinth.com/data/np5eeBdh/icon.png",
+            downloads: 9200000,
+            categories: ["security", "world"],
+            defaultFileName: "WorldGuard.jar"
+        },
+        {
+            id: "vault",
+            slug: "vault",
+            title: "Vault",
+            author: "MilkBowl",
+            description: "Essential permissions and economy abstraction API used by almost all economy and shop plugins.",
+            icon_url: "https://cdn.modrinth.com/data/YYXW3k6s/icon.png",
+            downloads: 13900000,
+            categories: ["utility", "economy"],
+            directDownload: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar",
+            defaultFileName: "Vault.jar"
+        },
+        {
+            id: "coreprotect",
+            slug: "coreprotect",
+            title: "CoreProtect",
+            author: "Intelli",
+            description: "Fast, efficient data logging, anti-griefing, block inspection, and rollback tool.",
+            icon_url: "https://cdn.modrinth.com/data/Lu5Kuzh3/icon.png",
+            downloads: 6700000,
+            categories: ["security", "administration"],
+            defaultFileName: "CoreProtect.jar"
+        },
+        {
+            id: "chunky",
+            slug: "chunky",
+            title: "Chunky",
+            author: "pop4959",
+            description: "Pre-generates world chunks quickly and efficiently to prevent server lag when players explore.",
+            icon_url: "https://cdn.modrinth.com/data/fALzjamp/icon.png",
+            downloads: 4800000,
+            categories: ["optimization", "world"],
+            defaultFileName: "Chunky.jar"
+        },
+        {
+            id: "spark",
+            slug: "spark",
+            title: "spark",
+            author: "Luck",
+            description: "Performance profiling and diagnosis tool for Minecraft servers. Find TPS drops, memory leaks, and CPU lag.",
+            icon_url: "https://cdn.modrinth.com/data/l6YH9Als/icon.png",
+            downloads: 6200000,
+            categories: ["optimization"],
+            defaultFileName: "spark.jar"
+        },
+        {
+            id: "placeholderapi",
+            slug: "placeholderapi",
+            title: "PlaceholderAPI",
+            author: "HelpChat",
+            description: "Allows plugins to share and display placeholders (player stats, balances, ranks, server info).",
+            icon_url: "https://cdn.modrinth.com/data/bW5OtiuG/icon.png",
+            downloads: 9800000,
+            categories: ["utility"],
+            defaultFileName: "PlaceholderAPI.jar"
+        },
+        {
+            id: "decentholograms",
+            slug: "decentholograms",
+            title: "DecentHolograms",
+            author: "DecentSoftware",
+            description: "Lightweight and powerful hologram plugin supporting click actions, animations, and pages.",
+            icon_url: "https://cdn.modrinth.com/data/23WvEwhU/icon.png",
+            downloads: 3900000,
+            categories: ["utility", "decorative"],
+            defaultFileName: "DecentHolograms.jar"
+        },
+        {
+            id: "skinsrestorer",
+            slug: "skinsrestorer",
+            title: "SkinsRestorer",
+            author: "SkinsRestorer",
+            description: "Restores player skins for offline-mode servers and allows custom skin changes via command.",
+            icon_url: "https://cdn.modrinth.com/data/7bfaQ47v/icon.png",
+            downloads: 5100000,
+            categories: ["utility"],
+            defaultFileName: "SkinsRestorer.jar"
+        },
+        {
+            id: "multiverse-core",
+            slug: "multiverse-core",
+            title: "Multiverse-Core",
+            author: "Multiverse",
+            description: "Easily create, import, and manage multiple worlds on a single server with custom portals.",
+            icon_url: "https://cdn.modrinth.com/data/g8e1mQ1t/icon.png",
+            downloads: 8100000,
+            categories: ["world", "management"],
+            defaultFileName: "Multiverse-Core.jar"
+        },
+        {
+            id: "tab-was-taken",
+            slug: "tab-was-taken",
+            title: "TAB",
+            author: "NEZNAMY",
+            description: "An outstanding custom tablist, nametag, bossbar, and scoreboard formatting plugin.",
+            icon_url: "https://cdn.modrinth.com/data/bW5OtiuG/icon.png",
+            downloads: 4500000,
+            categories: ["utility", "decorative"],
+            defaultFileName: "TAB.jar"
+        },
+        {
+            id: "grimac",
+            slug: "grimac",
+            title: "Grim Anticheat",
+            author: "GrimAC",
+            description: "Modern 1.8-1.21+ deterministic, zero-false-positive packet-level anticheat for Paper.",
+            icon_url: "https://cdn.modrinth.com/data/F620n2g1/icon.png",
+            downloads: 1800000,
+            categories: ["security", "administration"],
+            defaultFileName: "GrimAC.jar"
+        },
+        {
+            id: "simple-voice-chat",
+            slug: "simple-voice-chat",
+            title: "Simple Voice Chat",
+            author: "henkelmax",
+            description: "Proximity voice chat in Minecraft! Hear players speak based on their distance and position.",
+            icon_url: "https://cdn.modrinth.com/data/9eGKhmgb/icon.png",
+            downloads: 66900000,
+            categories: ["social", "utility"],
+            defaultFileName: "voicechat-bukkit.jar"
+        },
+        {
+            id: "fastasyncworldedit",
+            slug: "fastasyncworldedit",
+            title: "FastAsyncWorldEdit (FAWE)",
+            author: "IntellectualSites",
+            description: "Blazingly fast, asynchronous WorldEdit implementation optimized to prevent server lag.",
+            icon_url: "https://cdn.modrinth.com/data/u55v77aN/icon.png",
+            downloads: 3200000,
+            categories: ["world", "optimization"],
+            defaultFileName: "FastAsyncWorldEdit.jar"
+        },
+        {
+            id: "gsit",
+            slug: "gsit",
+            title: "GSit",
+            author: "Gecolay",
+            description: "Allows players to sit on stairs/slabs, crawl anywhere, lay down, and emote smoothly.",
+            icon_url: "https://cdn.modrinth.com/data/2mhnWp7Q/icon.png",
+            downloads: 2400000,
+            categories: ["utility", "fun"],
+            defaultFileName: "GSit.jar"
+        },
+        {
+            id: "griefprevention",
+            slug: "griefprevention",
+            title: "GriefPrevention",
+            author: "RoboMWM",
+            description: "Self-service land claims with a golden shovel. Zero-admin grief prevention for survival servers.",
+            icon_url: "https://cdn.modrinth.com/data/xZl9Kq1b/icon.png",
+            downloads: 4100000,
+            categories: ["security", "world"],
+            defaultFileName: "GriefPrevention.jar"
+        },
+        {
+            id: "farmcontrol",
+            slug: "farmcontrol",
+            title: "FarmControl",
+            author: "froobynooby",
+            description: "Drastically reduce lag from massive mob farms and breeding without breaking mechanics.",
+            icon_url: "https://cdn.modrinth.com/data/fALzjamp/icon.png",
+            downloads: 1200000,
+            categories: ["optimization"],
+            defaultFileName: "FarmControl.jar"
+        },
+        {
+            id: "deluxemenus",
+            slug: "deluxemenus",
+            title: "DeluxeMenus",
+            author: "clip",
+            description: "Create stunning customizable GUI menus, server selectors, shops, and kits with ease.",
+            icon_url: "https://cdn.modrinth.com/data/x4n924k8/icon.png",
+            downloads: 3700000,
+            categories: ["utility", "economy"],
+            defaultFileName: "DeluxeMenus.jar"
+        }
+    ];
+
     // ── Event Emitter ───────────────────────────────────────────
     const eventCallbacks = {};
     function onNativeEvent(eventName, callback) {
@@ -378,12 +660,54 @@
 
         // ── Player Manager ────────────────────────────────────
         playersGet:     ()           => ServerProcess.playersGet ? ServerProcess.playersGet() : Promise.resolve({ ops: [], whitelist: [], bannedPlayers: [] }),
-        playersGetCache:()          => ServerProcess.playersGetCache ? ServerProcess.playersGetCache() : Promise.resolve({ players: [] }),
+        playersGetCache: async () => {
+            try {
+                if (ServerProcess.playersGetCache) {
+                    const res = await ServerProcess.playersGetCache();
+                    if (Array.isArray(res)) return res;
+                    if (res && Array.isArray(res.players)) return res.players;
+                }
+                return [];
+            } catch (e) {
+                return [];
+            }
+        },
         playersAdd:     (list, name) => ServerProcess.playersAdd ? ServerProcess.playersAdd({ list, name }) : Promise.resolve({ success: true }),
         playersRemove:  (list, name) => ServerProcess.playersRemove ? ServerProcess.playersRemove({ list, name }) : Promise.resolve({ success: true }),
 
         // ── Properties ────────────────────────────────────────
-        propsGet:  ()       => ServerProcess.propsGet ? ServerProcess.propsGet() : Promise.resolve({}),
+        propsGet: async () => {
+            const defaultProps = {
+                'motd': 'A Jtg-Craft Minecraft Server',
+                'server-port': '25565',
+                'gamemode': 'survival',
+                'difficulty': 'easy',
+                'max-players': '20',
+                'online-mode': 'false',
+                'pvp': 'true',
+                'view-distance': '8',
+                'simulation-distance': '6',
+                'level-name': 'world',
+                'allow-flight': 'false',
+                'white-list': 'false',
+                'spawn-monsters': 'true',
+                'spawn-animals': 'true',
+                'spawn-npcs': 'true',
+                'hardcore': 'false',
+                'enable-command-block': 'false'
+            };
+            try {
+                if (ServerProcess.propsGet) {
+                    const res = await ServerProcess.propsGet();
+                    if (res && typeof res === 'object' && Object.keys(res).length > 0) {
+                        return { ...defaultProps, ...res };
+                    }
+                }
+                return defaultProps;
+            } catch (e) {
+                return defaultProps;
+            }
+        },
         propsSave: (props)  => ServerProcess.propsSave ? ServerProcess.propsSave({ props }) : Promise.resolve({ success: true }),
 
         // ── Playit Plugin (Desktop only stub) ─────────────────
@@ -391,10 +715,185 @@
         playitInstall: () => Promise.resolve({ error: 'Playit is available on Desktop edition.' }),
         playitRemove:  () => Promise.resolve({ error: 'Playit is available on Desktop edition.' }),
 
-        // ── Plugin Manager (Modrinth CDN) ─────────────────────
-        pluginSearch:       (query, cat) => FileManager.pluginSearch ? FileManager.pluginSearch({ query, category: cat }) : Promise.resolve({ hits: [] }),
-        pluginGetVersion:   (id)         => FileManager.pluginGetVersion ? FileManager.pluginGetVersion({ id }) : Promise.resolve(null),
-        pluginInstall:      (opts)       => FileManager.pluginInstall ? FileManager.pluginInstall(opts) : Promise.resolve({ success: true }),
+        // ── Plugin Manager (Modrinth Live API + Curated CDN) ──
+        pluginSearch: async (query, category) => {
+            let installedList = [];
+            try {
+                const inst = await window.api.pluginsGetInstalled();
+                installedList = (inst || []).map(p => p.fileName || p.name || '');
+            } catch (_) {}
+
+            const isInstalled = (item) => {
+                const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const sNorm = norm(item.slug);
+                const tNorm = norm(item.title);
+                return installedList.some(f => {
+                    const fNorm = norm(f.replace(/\.jar(\.disabled)?$/i, ''));
+                    return (sNorm && (fNorm.includes(sNorm) || sNorm.includes(fNorm))) ||
+                           (tNorm && (fNorm.includes(tNorm) || tNorm.includes(fNorm)));
+                });
+            };
+
+            const hasQuery = query && query.trim().length > 0;
+            const cat = (category && category !== 'all') ? category : null;
+
+            try {
+                const facets = [['project_type:plugin']];
+                if (cat) facets.push([`categories:${cat}`]);
+                const encodedFacets = encodeURIComponent(JSON.stringify(facets));
+                let url;
+                if (hasQuery) {
+                    const encodedQuery = encodeURIComponent(query.trim());
+                    url = `https://api.modrinth.com/v2/search?query=${encodedQuery}&facets=${encodedFacets}&limit=40`;
+                } else {
+                    url = `https://api.modrinth.com/v2/search?facets=${encodedFacets}&index=downloads&limit=40`;
+                }
+
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && Array.isArray(data.hits) && data.hits.length > 0) {
+                        const results = data.hits.map(hit => ({
+                            id: hit.project_id,
+                            slug: hit.slug,
+                            title: hit.title,
+                            description: hit.description,
+                            author: hit.author,
+                            icon_url: hit.icon_url || '',
+                            downloads: hit.downloads || 0,
+                            categories: hit.categories || [],
+                            isCurated: false
+                        }));
+
+                        if (!hasQuery && !cat) {
+                            const curatedMapped = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
+                            const combined = [...curatedMapped];
+                            for (const r of results) {
+                                if (!combined.some(c => c.slug === r.slug)) {
+                                    combined.push(r);
+                                }
+                            }
+                            return combined.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+                        }
+
+                        return results.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+                    }
+                }
+            } catch (err) {
+                console.warn('Modrinth API search error:', err);
+            }
+
+            // Fallback to curated catalog
+            let fallbackList = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
+            if (cat) {
+                fallbackList = fallbackList.filter(p => p.categories && p.categories.includes(cat));
+            }
+            if (hasQuery) {
+                const q = query.toLowerCase();
+                fallbackList = fallbackList.filter(p =>
+                    p.title.toLowerCase().includes(q) ||
+                    p.description.toLowerCase().includes(q) ||
+                    (p.author && p.author.toLowerCase().includes(q)) ||
+                    (p.slug && p.slug.toLowerCase().includes(q))
+                );
+            }
+            return fallbackList.map(item => ({ ...item, isInstalled: isInstalled(item) }));
+        },
+
+        pluginGetVersion: async (projectIdOrSlug) => {
+            const curated = CURATED_PLUGINS.find(p => p.slug === projectIdOrSlug || p.id === projectIdOrSlug);
+            if (curated && curated.directDownload) {
+                return {
+                    downloadUrl: curated.directDownload,
+                    fileName: curated.defaultFileName || `${curated.title}.jar`,
+                    versionNumber: 'latest'
+                };
+            }
+
+            let versionList = [];
+            try {
+                const loadersParam = encodeURIComponent(JSON.stringify(['paper', 'spigot', 'bukkit', 'purpur', 'folia']));
+                const filterUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version?loaders=${loadersParam}`;
+                const resp = await fetch(filterUrl);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) versionList = data;
+                }
+            } catch (_) {}
+
+            if (versionList.length === 0) {
+                try {
+                    const rawUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
+                    const resp = await fetch(rawUrl);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data)) versionList = data;
+                    }
+                } catch (_) {}
+            }
+
+            if (versionList.length > 0) {
+                for (const ver of versionList) {
+                    if (!Array.isArray(ver.files) || ver.files.length === 0) continue;
+                    const jarFiles = ver.files.filter(f =>
+                        f.filename &&
+                        f.filename.endsWith('.jar') &&
+                        !f.filename.includes('-sources') &&
+                        !f.filename.includes('-dev') &&
+                        !f.filename.includes('-javadoc')
+                    );
+                    if (jarFiles.length === 0) continue;
+                    const preferredJar = jarFiles.find(f => {
+                        const lower = f.filename.toLowerCase();
+                        return lower.includes('paper') || lower.includes('spigot') || lower.includes('bukkit') || lower.includes('purpur');
+                    }) || jarFiles.find(f => f.primary) || jarFiles[0];
+
+                    if (preferredJar && preferredJar.url) {
+                        return {
+                            downloadUrl: preferredJar.url,
+                            fileName: preferredJar.filename,
+                            versionNumber: ver.version_number || 'latest',
+                            size: preferredJar.size
+                        };
+                    }
+                }
+            }
+
+            if (curated) {
+                return {
+                    downloadUrl: curated.directDownload || `https://api.modrinth.com/v2/project/${curated.slug}/version`,
+                    fileName: curated.defaultFileName || `${curated.title}.jar`,
+                    versionNumber: 'latest'
+                };
+            }
+
+            throw new Error('Could not find a downloadable JAR for this plugin on Modrinth.');
+        },
+
+        pluginInstall: async (opts) => {
+            let downloadUrl = opts.downloadUrl || opts.url;
+            let fileName = opts.fileName;
+
+            if (!downloadUrl && opts.projectId) {
+                const ver = await window.api.pluginGetVersion(opts.projectId);
+                downloadUrl = ver.downloadUrl;
+                fileName = fileName || ver.fileName;
+            }
+
+            if (!downloadUrl) throw new Error('Download URL not found for this plugin.');
+            if (!fileName) fileName = downloadUrl.split('/').pop().split('?')[0] || 'plugin.jar';
+            if (!fileName.endsWith('.jar')) fileName += '.jar';
+
+            if (FileManager.pluginInstall) {
+                return await FileManager.pluginInstall({
+                    url: downloadUrl,
+                    downloadUrl: downloadUrl,
+                    fileName: fileName
+                });
+            }
+            return { success: true };
+        },
+
         pluginsGetInstalled: async () => {
             try {
                 if (FileManager.pluginsGetInstalled) {
@@ -409,7 +908,14 @@
         pluginToggle:       (fileName)   => FileManager.pluginToggle ? FileManager.pluginToggle({ fileName }) : Promise.resolve({ success: true }),
         pluginDelete:       (fileName)   => FileManager.pluginDelete ? FileManager.pluginDelete({ fileName }) : Promise.resolve({ success: true }),
         pluginUploadLocal:  ()           => FileManager.pluginUploadLocal ? FileManager.pluginUploadLocal() : Promise.resolve({ success: true }),
-        onPluginDownloadProgress: (cb)   => onNativeEvent('plugin-download-progress', cb),
+        onPluginDownloadProgress: (cb) => {
+            return onNativeEvent('plugin-download-progress', (data) => {
+                const total = data.total || 0;
+                const downloaded = data.downloaded || 0;
+                const pct = data.pct !== undefined ? data.pct : (total > 0 ? Math.round((downloaded * 100) / total) : 0);
+                cb({ fileName: data.fileName || '', pct, downloaded, total });
+            });
+        },
 
         // ── Backup ────────────────────────────────────────────
         createBackup: (mode) => FileManager.createBackup ? FileManager.createBackup({ mode }) : Promise.resolve({ success: true }),

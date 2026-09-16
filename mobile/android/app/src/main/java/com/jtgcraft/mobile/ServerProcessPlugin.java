@@ -409,6 +409,10 @@ public class ServerProcessPlugin extends Plugin {
                 env.put("LD_LIBRARY_PATH", ldPath);
                 env.put("PATH", javaBin.getParent() + ":/system/bin:/system/xbin");
 
+                JSObject launchMsg = new JSObject();
+                launchMsg.put("text", "[STARTING SERVER] Launching Paper with Java 17 (" + ram + "MB RAM)...\n");
+                notifyListeners("console-data", launchMsg);
+
                 serverProcess = pb.start();
                 processInput = new BufferedWriter(new OutputStreamWriter(serverProcess.getOutputStream()));
                 isRunning = true;
@@ -436,7 +440,10 @@ public class ServerProcessPlugin extends Plugin {
                     notifyListeners("console-data", consoleData);
                 }
 
-                serverProcess.waitFor();
+                int exitCode = serverProcess.waitFor();
+                JSObject exitMsg = new JSObject();
+                exitMsg.put("text", "[SERVER STOPPED] Process finished with exit code " + exitCode + "\n");
+                notifyListeners("console-data", exitMsg);
             } catch (Exception e) {
                 JSObject consoleData = new JSObject();
                 consoleData.put("text", "[ERROR] " + e.getMessage() + "\n");
@@ -543,14 +550,33 @@ public class ServerProcessPlugin extends Plugin {
     public void propsGet(PluginCall call) {
         File pf = new File(getServerDir(), "server.properties");
         JSObject ret = new JSObject();
+        Properties p = new Properties();
+        // Baseline defaults for mobile server
+        p.setProperty("motd", "A Jtg-Craft Minecraft Server");
+        p.setProperty("server-port", "25565");
+        p.setProperty("gamemode", "survival");
+        p.setProperty("difficulty", "easy");
+        p.setProperty("max-players", "20");
+        p.setProperty("online-mode", "false");
+        p.setProperty("pvp", "true");
+        p.setProperty("view-distance", "8");
+        p.setProperty("simulation-distance", "6");
+        p.setProperty("level-name", "world");
+        p.setProperty("allow-flight", "false");
+        p.setProperty("white-list", "false");
+        p.setProperty("spawn-monsters", "true");
+        p.setProperty("spawn-animals", "true");
+        p.setProperty("spawn-npcs", "true");
+        p.setProperty("hardcore", "false");
+        p.setProperty("enable-command-block", "false");
+
         if (pf.exists()) {
             try (FileInputStream in = new FileInputStream(pf)) {
-                Properties p = new Properties();
                 p.load(in);
-                for (String key : p.stringPropertyNames()) {
-                    ret.put(key, p.getProperty(key));
-                }
             } catch (Exception ignored) {}
+        }
+        for (String key : p.stringPropertyNames()) {
+            ret.put(key, p.getProperty(key));
         }
         call.resolve(ret);
     }

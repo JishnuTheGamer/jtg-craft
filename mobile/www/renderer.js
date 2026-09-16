@@ -878,7 +878,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pmList = $('#pm-list');
         pmList.innerHTML = '';
         try {
-            const players = await window.api.playersGetCache();
+            const res = await window.api.playersGetCache();
+            const players = Array.isArray(res) ? res : (res && Array.isArray(res.players) ? res.players : []);
             if (!players || players.length === 0) {
                 pmList.innerHTML = `
                     <div class="pm-empty">
@@ -1283,7 +1284,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
 
         try {
-            const plugins = await window.api.pluginSearch(query, category);
+            const res = await window.api.pluginSearch(query, category);
+            const plugins = Array.isArray(res) ? res : (res && Array.isArray(res.hits) ? res.hits : []);
             grid.innerHTML = '';
 
             if (!plugins || plugins.length === 0) {
