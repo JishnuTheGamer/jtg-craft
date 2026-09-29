@@ -124,12 +124,6 @@ const initApp = async () => {
     async function checkAndDisplayStorageBanner(dir) {
         const banner = $('#storage-perm-banner');
         if (!banner) return;
-        const targetDir = dir || ($('#inp-dir') ? $('#inp-dir').value.trim() : '') || savedDir || '';
-        const isExternalStorage = targetDir.startsWith('/storage/emulated/0') || targetDir.startsWith('/sdcard') || targetDir.includes('/storage/');
-        if (!isExternalStorage) {
-            banner.classList.add('hidden');
-            return;
-        }
         try {
             if (window.api && window.api.checkStoragePermission) {
                 const perm = await window.api.checkStoragePermission();
@@ -139,8 +133,21 @@ const initApp = async () => {
                 }
             }
         } catch (_) {}
+
+        // Permission is not granted yet -> check if target path is isolated app storage
+        const targetDir = dir || ($('#inp-dir') ? $('#inp-dir').value.trim() : '') || savedDir || '/storage/emulated/0/JtgCraft/server';
+        const isIsolated = targetDir.includes('/data/data/') || targetDir.includes('/files/servers/');
+        if (isIsolated) {
+            banner.classList.add('hidden');
+            return;
+        }
+
+        // Show banner prominently for Phone Storage & External Storage
         banner.classList.remove('hidden');
     }
+
+    // Proactively verify and display banner immediately on startup
+    checkAndDisplayStorageBanner();
 
     const btnGrantStorage = $('#btn-grant-storage');
     if (btnGrantStorage) {
