@@ -1118,93 +1118,113 @@ textarea {
 
 /* ── Server Network Join Info Card ───────────────────────── */
 .server-network-card {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     background: linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.85));
-    border: 1px solid rgba(56, 189, 248, 0.25);
-    border-radius: 12px;
-    padding: 10px 14px;
-    margin: 8px 12px;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    transition: all 0.3s ease;
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 8px;
+    padding: 3px 8px;
+    margin: 4px 10px 4px 10px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+    min-height: 28px;
+    box-sizing: border-box;
+}
+
+.server-network-card::-webkit-scrollbar {
+    display: none;
 }
 
 .server-network-card.hidden {
     display: none !important;
 }
 
-.network-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
 .network-badge {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
+    gap: 3px;
+    font-size: 10px;
     font-weight: 700;
     color: #38bdf8;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-
-.btn-copy-chip {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: #38bdf8;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-copy-chip:active {
-    background: rgba(56, 189, 248, 0.3);
-    transform: scale(0.96);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .network-card-body {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
+}
+
+.network-card-body::-webkit-scrollbar {
+    display: none;
 }
 
 .network-ip-pill {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(0, 0, 0, 0.35);
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 12px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 11px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
 }
 
 .network-ip-pill:active {
-    background: rgba(34, 197, 94, 0.15);
+    background: rgba(34, 197, 94, 0.2);
     border-color: rgba(34, 197, 94, 0.4);
+    transform: scale(0.97);
 }
 
 .network-ip-pill .pill-label {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    line-height: 1;
 }
 
 .network-ip-pill .pill-val {
     color: #4ade80;
     font-family: monospace;
     font-weight: 700;
-    font-size: 12px;
+    font-size: 11px;
+    letter-spacing: -0.2px;
+}
+
+.btn-copy-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.btn-copy-chip:active {
+    background: rgba(56, 189, 248, 0.3);
+    transform: scale(0.95);
 }
 
 /* ── Server Properties Mobile Toolbar & Layout ─────────────── */

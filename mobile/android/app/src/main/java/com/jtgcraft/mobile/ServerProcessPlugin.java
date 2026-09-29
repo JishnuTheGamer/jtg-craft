@@ -80,11 +80,54 @@ public class ServerProcessPlugin extends Plugin {
         return getActiveServerDir(getContext());
     }
 
-    private File getJavaBinary() {
-        // Get the java binary based on the current server's MC version
+    /**
+     * Determines the effective Java major version for the active server:
+     * 1. Per-server manual override from .mcmeta.json ("javaVersion" or "java")
+     * 2. Global setting from SharedPreferences ("java_version_setting")
+     * 3. Fallback: Automatically derived from the server's Minecraft version
+     */
+    public int getEffectiveJavaVersion() {
+        File sdir = getServerDir();
+        File meta = new File(sdir, ".mcmeta.json");
+        String configured = null;
+        if (meta.exists()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                StringBuilder sb = new StringBuilder();
+                String l;
+                while ((l = br.readLine()) != null) sb.append(l);
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                if (obj.has("javaVersion")) {
+                    configured = obj.optString("javaVersion", null);
+                } else if (obj.has("java")) {
+                    configured = obj.optString("java", null);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (configured == null || configured.trim().isEmpty() || "auto".equalsIgnoreCase(configured.trim())) {
+            try {
+                android.content.SharedPreferences prefs = getContext().getSharedPreferences("jtg_java_prefs", Context.MODE_PRIVATE);
+                String prefSetting = prefs.getString("java_version_setting", "auto");
+                if (prefSetting != null && !prefSetting.trim().isEmpty() && !"auto".equalsIgnoreCase(prefSetting.trim())) {
+                    configured = prefSetting.trim();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (configured != null && !configured.trim().isEmpty() && !"auto".equalsIgnoreCase(configured.trim())) {
+            try {
+                int parsed = Integer.parseInt(configured.trim());
+                if (parsed > 0) return parsed;
+            } catch (Exception ignored) {}
+        }
+
         String mcVersion = getServerMcVersion();
-        int requiredJava = getRequiredJavaVersion(mcVersion);
-        return getJavaBinaryForVersion(requiredJava);
+        return getRequiredJavaVersion(mcVersion);
+    }
+
+    private File getJavaBinary() {
+        int targetJava = getEffectiveJavaVersion();
+        return getJavaBinaryForVersion(targetJava);
     }
 
     /** Returns the path to java binary for the requested JDK major version */
@@ -450,13 +493,7 @@ public class ServerProcessPlugin extends Plugin {
 
             JSObject banner = new JSObject();
             banner.put("text",
-                "\n" +
-                "=====================================================\n" +
-                "  [Jtg-craft] \uD83C\uDFAE Server is Online & Ready to Join!\n" +
-                "  \uD83D\uDCF1 Same Phone Join:       127.0.0.1:" + port + "\n" +
-                "  \uD83C\uDF10 LAN / Wi-Fi / Hotspot:  " + bestLan + ":" + port + "\n" +
-                "  (Connect other devices to the same Wi-Fi or Hotspot)\n" +
-                "=====================================================\n\n"
+                "\n[Jtg-craft] \uD83C\uDFAE Server Online! Same Phone: 127.0.0.1:" + port + " | Wi-Fi: " + bestLan + ":" + port + "\n\n"
             );
             notifyListeners("console-data", banner);
         } catch (Exception ignored) {}
@@ -466,9 +503,41 @@ public class ServerProcessPlugin extends Plugin {
         File sdir = getServerDir();
         ensureMetadata();
 
-        File javaBin = getJavaBinary();
+        int javaVer = getEffectiveJavaVersion();
+        File javaBin = getJavaBinaryForVersion(javaVer);
+
+        // If target Java version is 21+ and not installed/executable, attempt auto-install
+        if (javaVer >= 21 && (!javaBin.exists() || !javaBin.canExecute())) {
+            JSObject dlMsg = new JSObject();
+            dlMsg.put("text", "[JAVA SETUP] Java 21 ARM64 runtime not found. Automatically downloading & installing Java 21...\n");
+            notifyListeners("console-data", dlMsg);
+            try {
+                boolean ok = JavaManagerPlugin.installJava21Sync(getContext(), (pct, status) -> {
+                    JSObject pMsg = new JSObject();
+                    pMsg.put("text", "[JAVA SETUP] " + status + " (" + pct + "%)\n");
+                    notifyListeners("console-data", pMsg);
+                });
+                if (ok) {
+                    javaBin = getJavaBinaryForVersion(javaVer);
+                }
+            } catch (Throwable t) {
+                JSObject errMsg = new JSObject();
+                errMsg.put("text", "[JAVA ERROR] Auto-install failed: " + t.getMessage() + "\n");
+                notifyListeners("console-data", errMsg);
+            }
+        }
+
         if (!javaBin.exists()) {
-            throw new FileNotFoundException("Java runtime not found! Please run setup first.");
+            File fallback17 = getJavaBinaryForVersion(17);
+            if (fallback17.exists() && (fallback17.canExecute() || fallback17.setExecutable(true, false))) {
+                javaBin = fallback17;
+                javaVer = 17;
+                JSObject warn = new JSObject();
+                warn.put("text", "[WARN] Using installed Java 17 runtime fallback.\n");
+                notifyListeners("console-data", warn);
+            } else {
+                throw new FileNotFoundException("Java " + javaVer + " runtime not found! Please run setup first.");
+            }
         }
 
         File paperJar = new File(sdir, "paper.jar");
@@ -583,7 +652,6 @@ public class ServerProcessPlugin extends Plugin {
 
         JSObject launchMsg = new JSObject();
         String mcVer = getServerMcVersion();
-        int javaVer = getRequiredJavaVersion(mcVer);
         launchMsg.put("text", "[STARTING SERVER] Launching Paper " + mcVer + " with Java " + javaVer + " ARM64 (" + ram + "MB RAM)...\n");
         notifyListeners("console-data", launchMsg);
 
@@ -1297,6 +1365,8 @@ public class ServerProcessPlugin extends Plugin {
                     ret.put("cpuCores", c);
                 }
                 if (obj.has("version")) ret.put("version", obj.getString("version"));
+                if (obj.has("javaVersion")) ret.put("javaVersion", obj.getString("javaVersion"));
+                else if (obj.has("java")) ret.put("javaVersion", obj.getString("java"));
             } catch (Exception ignored) {}
         }
         call.resolve(ret);
@@ -1328,6 +1398,9 @@ public class ServerProcessPlugin extends Plugin {
                 obj.put("cpu", call.getInt("cpu"));
             } else if (call.hasOption("cpuCores")) {
                 obj.put("cpu", call.getInt("cpuCores"));
+            }
+            if (call.hasOption("javaVersion")) {
+                obj.put("javaVersion", call.getString("javaVersion"));
             }
             try (FileWriter fw = new FileWriter(meta)) {
                 fw.write(obj.toString(2));

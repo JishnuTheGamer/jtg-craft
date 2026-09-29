@@ -350,7 +350,14 @@
     function hookListener(plugin, eventName) {
         try {
             if (plugin && typeof plugin.addListener === 'function') {
-                plugin.addListener(eventName, (data) => emitEvent(eventName, data));
+                plugin.addListener(eventName, (data) => {
+                    emitEvent(eventName, data);
+                    if (eventName === 'java-download-progress' || eventName === 'setup-progress') {
+                        if (data && typeof data.percent === 'number') {
+                            emitEvent('download-progress', data.percent);
+                        }
+                    }
+                });
             }
         } catch (e) {
             console.warn(`Could not hook listener for ${eventName}:`, e);
@@ -367,6 +374,19 @@
     hookListener(JavaManager, 'download-progress');
     hookListener(FileManager, 'backup-progress');
     hookListener(FileManager, 'plugin-download-progress');
+
+    function getRecommendedJavaForMc(mcVersion) {
+        if (!mcVersion) return 17;
+        try {
+            const parts = String(mcVersion).split('.');
+            const major = parseInt(parts[0], 10) || 1;
+            const minor = parseInt(parts[1], 10) || 0;
+            if (major > 1 || minor >= 21) return 21;
+            if (minor >= 18) return 17;
+            if (minor >= 17) return 16;
+        } catch (_) {}
+        return 17;
+    }
 
     // ── Expose window.api (Identical signature to Electron preload.js) ──
     window.api = {
@@ -433,36 +453,77 @@
         getJavaSettings: async () => {
             try {
                 let setting = 'auto';
-                if (JavaManager.getJavaSettings) {
-                    const res = await JavaManager.getJavaSettings();
-                    setting = res.configuredSetting || res.setting || 'auto';
+                let sVer = '1.20.1';
+                try {
+                    const cfg = await window.api.getServerConfig();
+                    if (cfg) {
+                        if (cfg.version) sVer = cfg.version;
+                        if (cfg.javaVersion) setting = cfg.javaVersion;
+                    }
+                } catch (_) {}
+
+                if (!setting || setting === 'auto') {
+                    if (JavaManager.getJavaSettings) {
+                        const res = await JavaManager.getJavaSettings();
+                        if (res && res.configuredSetting) setting = res.configuredSetting;
+                        else if (res && res.setting) setting = res.setting;
+                    }
                 }
-                const activeVersion = (setting === 'auto') ? '17' : setting;
+                if (!setting) setting = 'auto';
+
+                const rec = getRecommendedJavaForMc(sVer);
+                const activeVersion = (setting === 'auto') ? String(rec) : String(setting);
+
                 return {
                     setting,
                     configuredSetting: setting,
                     activeVersion,
-                    serverVersion: '1.20.4'
+                    serverVersion: sVer
                 };
             } catch (e) {
-                return { setting: 'auto', configuredSetting: 'auto', activeVersion: '17', serverVersion: '1.20.4' };
+                return { setting: 'auto', configuredSetting: 'auto', activeVersion: '17', serverVersion: '1.20.1' };
             }
         },
         setJavaVersion: async (setting) => {
             try {
+                const s = String(setting || 'auto');
                 if (JavaManager.setJavaVersion) {
-                    await JavaManager.setJavaVersion({ setting });
+                    await JavaManager.setJavaVersion({ setting: s });
                 }
-                const activeVersion = (setting === 'auto') ? '17' : setting;
+                try {
+                    if (ServerProcess.saveServerConfig) {
+                        await ServerProcess.saveServerConfig({ javaVersion: s });
+                    }
+                } catch (_) {}
+
+                // If user selected Java 21 or higher, check if installed; if not, download & install!
+                if (s === '21' || s === '25') {
+                    if (JavaManager.checkJava21) {
+                        const chk = await JavaManager.checkJava21();
+                        if (!chk || !chk.installed) {
+                            await window.api.installJava21();
+                        }
+                    }
+                }
+
+                let sVer = '1.20.1';
+                try {
+                    const cfg = await window.api.getServerConfig();
+                    if (cfg && cfg.version) sVer = cfg.version;
+                } catch (_) {}
+
+                const rec = getRecommendedJavaForMc(sVer);
+                const activeVersion = (s === 'auto') ? String(rec) : s;
+
                 return {
                     success: true,
-                    setting,
-                    configuredSetting: setting,
+                    setting: s,
+                    configuredSetting: s,
                     activeVersion,
-                    serverVersion: '1.20.4'
+                    serverVersion: sVer
                 };
             } catch (e) {
-                return { success: true, setting, configuredSetting: setting, activeVersion: '17', serverVersion: '1.20.4' };
+                return { success: false, error: e.message || 'Failed to configure Java version' };
             }
         },
 

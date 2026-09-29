@@ -130,6 +130,10 @@ public class JavaManagerPlugin extends Plugin {
         return null;
     }
 
+    public interface JavaProgressListener {
+        void onProgress(int percent, String message);
+    }
+
     public File getJavaBinary() {
         return findJavaBinaryInDir(getJavaRootDir());
     }
@@ -138,7 +142,18 @@ public class JavaManagerPlugin extends Plugin {
         return findJavaBinaryInDir(getJava21RootDir());
     }
 
-    private File findJavaBinaryInDir(File root) {
+    public static File getJava21Binary(Context ctx) {
+        if (ctx == null) return null;
+        return findJavaBinaryInDir(new File(ctx.getFilesDir(), "java21"));
+    }
+
+    public static File getJava17Binary(Context ctx) {
+        if (ctx == null) return null;
+        return findJavaBinaryInDir(new File(ctx.getFilesDir(), "java"));
+    }
+
+    public static File findJavaBinaryInDir(File root) {
+        if (root == null) return null;
         File direct = new File(root, "bin/java");
         if (direct.exists()) return direct;
 
@@ -223,137 +238,99 @@ public class JavaManagerPlugin extends Plugin {
         }
     }
 
+    public static boolean installJava21Sync(Context ctx, JavaProgressListener listener) throws Exception {
+        File java21Dir = new File(ctx.getFilesDir(), "java21");
+        File existingBin = getJava21Binary(ctx);
+        if (existingBin != null && existingBin.exists() && (existingBin.canExecute() || existingBin.setExecutable(true, false))) {
+            if (listener != null) listener.onProgress(100, "Java 21 already installed");
+            return true;
+        }
+
+        // 1. Check local cached archive first
+        File cachedArchive = getPersistentArchive21(ctx);
+        if (cachedArchive != null) {
+            if (listener != null) listener.onProgress(50, "Extracting local Java 21 runtime...");
+            if (java21Dir.exists()) deleteRecursive(java21Dir);
+            java21Dir.mkdirs();
+            extractArchive(cachedArchive, java21Dir);
+            setExecutableRecursive(java21Dir);
+
+            File javaBin = getJava21Binary(ctx);
+            if (javaBin != null && javaBin.exists() && (javaBin.canExecute() || javaBin.setExecutable(true, false))) {
+                if (listener != null) listener.onProgress(100, "Java 21 ARM64 Installed");
+                return true;
+            }
+        }
+
+        // 2. Download Java 21 components from official PojavLauncher Gladiolus release
+        if (listener != null) listener.onProgress(5, "Connecting to Java 21 repository...");
+        URL finalUrl = resolveRedirects(POJAV_APK_URL);
+
+        File binArchive = new File(ctx.getFilesDir(), "jre21-bin.tar.xz");
+        File univArchive = new File(ctx.getFilesDir(), "jre21-univ.tar.xz");
+
+        try {
+            if (listener != null) listener.onProgress(10, "Downloading Java 21 Binaries (1/2)...");
+            downloadRangeInflatedInternal(finalUrl, POJAV_JRE21_BIN_OFFSET, POJAV_JRE21_BIN_SIZE, binArchive, "Downloading Java 21 Binaries (1/2)", 10, 25, listener);
+
+            if (listener != null) listener.onProgress(35, "Downloading Java 21 Libraries (2/2)...");
+            downloadRangeInflatedInternal(finalUrl, POJAV_JRE21_UNIV_OFFSET, POJAV_JRE21_UNIV_SIZE, univArchive, "Downloading Java 21 Libraries (2/2)", 35, 40, listener);
+
+            if (listener != null) listener.onProgress(80, "Extracting Java 21 runtime...");
+            if (java21Dir.exists()) deleteRecursive(java21Dir);
+            java21Dir.mkdirs();
+
+            extractArchive(binArchive, java21Dir);
+
+            if (listener != null) listener.onProgress(90, "Extracting Java 21 libraries...");
+            extractArchive(univArchive, java21Dir);
+
+            setExecutableRecursive(java21Dir);
+
+            File javaBin = getJava21Binary(ctx);
+            if (javaBin == null || !javaBin.exists()) {
+                throw new IOException("Java 21 binary not found after extraction");
+            }
+            javaBin.setExecutable(true, false);
+            javaBin.setReadable(true, false);
+
+            if (listener != null) listener.onProgress(100, "Java 21 ARM64 Installed");
+            return true;
+        } finally {
+            if (binArchive.exists()) binArchive.delete();
+            if (univArchive.exists()) univArchive.delete();
+        }
+    }
+
     @PluginMethod
     public void installJava21(PluginCall call) {
         new Thread(() -> {
-            File binArchive = null;
-            File univArchive = null;
             try {
-                File java21Dir = getJava21RootDir();
-
-                // 1. Check if already installed
-                File existingBin = getJava21Binary();
-                if (existingBin.exists() && existingBin.canExecute()) {
-                    JSObject done = new JSObject();
-                    done.put("step", "java21");
-                    done.put("status", "Java 21 already installed");
-                    done.put("percent", 100);
-                    notifyListeners("setup-progress", done);
-                    JSObject res = new JSObject();
-                    res.put("success", true);
-                    res.put("path", existingBin.getAbsolutePath());
-                    call.resolve(res);
-                    return;
-                }
-
-                // 2. Check local cached archive first
-                File cachedArchive = getPersistentArchive21(getContext());
-                if (cachedArchive != null) {
-                    JSObject extractNotify = new JSObject();
-                    extractNotify.put("step", "java21");
-                    extractNotify.put("status", "Extracting local Java 21 runtime...");
-                    extractNotify.put("percent", 50);
-                    notifyListeners("setup-progress", extractNotify);
-
-                    if (java21Dir.exists()) deleteRecursive(java21Dir);
-                    java21Dir.mkdirs();
-                    extractArchive(cachedArchive, java21Dir);
-                    setExecutableRecursive(java21Dir);
-
-                    File javaBin = getJava21Binary();
-                    if (javaBin.exists() && javaBin.canExecute()) {
-                        JSObject done = new JSObject();
-                        done.put("step", "java21");
-                        done.put("status", "Java 21 ARM64 Installed");
-                        done.put("percent", 100);
-                        notifyListeners("setup-progress", done);
-                        JSObject res = new JSObject();
-                        res.put("success", true);
-                        res.put("path", javaBin.getAbsolutePath());
-                        call.resolve(res);
-                        return;
-                    }
-                }
-
-                // 3. Download Java 21 components from official PojavLauncher Gladiolus release
-                JSObject startNotify = new JSObject();
-                startNotify.put("step", "java21");
-                startNotify.put("status", "Connecting to Java 21 repository...");
-                startNotify.put("percent", 5);
-                notifyListeners("setup-progress", startNotify);
-                notifyListeners("java-download-progress", startNotify);
-
-                URL finalUrl = resolveRedirects(POJAV_APK_URL);
-
-                // Step 1/2: Download & inflate bin-arm64 (5.4 MB)
-                binArchive = new File(getContext().getFilesDir(), "jre21-bin.tar.xz");
-                downloadRangeInflated(finalUrl, POJAV_JRE21_BIN_OFFSET, POJAV_JRE21_BIN_SIZE, binArchive, "Downloading Java 21 Binaries (1/2)", 5, 35);
-
-                // Step 2/2: Download & inflate universal (23.5 MB)
-                univArchive = new File(getContext().getFilesDir(), "jre21-univ.tar.xz");
-                downloadRangeInflated(finalUrl, POJAV_JRE21_UNIV_OFFSET, POJAV_JRE21_UNIV_SIZE, univArchive, "Downloading Java 21 Libraries (2/2)", 35, 75);
-
-                // Step 3: Extract both into java21Dir
-                JSObject extractNotify = new JSObject();
-                extractNotify.put("step", "java21");
-                extractNotify.put("status", "Extracting Java 21 runtime...");
-                extractNotify.put("percent", 80);
-                notifyListeners("setup-progress", extractNotify);
-                notifyListeners("java-download-progress", extractNotify);
-
-                if (java21Dir.exists()) deleteRecursive(java21Dir);
-                java21Dir.mkdirs();
-
-                extractArchive(binArchive, java21Dir);
-
-                JSObject extractNotify2 = new JSObject();
-                extractNotify2.put("step", "java21");
-                extractNotify2.put("status", "Extracting Java 21 libraries...");
-                extractNotify2.put("percent", 90);
-                notifyListeners("setup-progress", extractNotify2);
-                notifyListeners("java-download-progress", extractNotify2);
-
-                extractArchive(univArchive, java21Dir);
-
-                setExecutableRecursive(java21Dir);
-
+                boolean ok = installJava21Sync(getContext(), (pct, status) -> {
+                    JSObject notify = new JSObject();
+                    notify.put("step", "java21");
+                    notify.put("status", status);
+                    notify.put("percent", pct);
+                    notifyListeners("setup-progress", notify);
+                    notifyListeners("java-download-progress", notify);
+                });
                 File javaBin = getJava21Binary();
-                if (!javaBin.exists()) {
-                    throw new IOException("Java 21 binary not found after extraction");
-                }
-
-                // Delete temporary download archives to free disk space
-                if (binArchive.exists()) binArchive.delete();
-                if (univArchive.exists()) univArchive.delete();
-
-                // Notify done
-                JSObject doneNotify = new JSObject();
-                doneNotify.put("step", "java21");
-                doneNotify.put("status", "Java 21 ARM64 Installed");
-                doneNotify.put("percent", 100);
-                notifyListeners("setup-progress", doneNotify);
-                notifyListeners("java-download-progress", doneNotify);
-
                 JSObject res = new JSObject();
-                res.put("success", true);
-                res.put("path", javaBin.getAbsolutePath());
+                res.put("success", ok);
+                if (javaBin != null) res.put("path", javaBin.getAbsolutePath());
                 call.resolve(res);
-
             } catch (Exception e) {
-                if (binArchive != null && binArchive.exists()) binArchive.delete();
-                if (univArchive != null && univArchive.exists()) univArchive.delete();
-
-                JSObject errNotify = new JSObject();
-                errNotify.put("step", "java21");
-                errNotify.put("status", "Java 21 install failed: " + e.getMessage());
-                errNotify.put("percent", 0);
-                notifyListeners("setup-progress", errNotify);
+                JSObject err = new JSObject();
+                err.put("step", "java21");
+                err.put("status", "Java 21 install failed: " + e.getMessage());
+                err.put("percent", 0);
+                notifyListeners("setup-progress", err);
                 call.reject("Failed to install Java 21: " + e.getMessage());
             }
         }).start();
     }
 
-    private URL resolveRedirects(String initialUrl) throws IOException {
+    public static URL resolveRedirects(String initialUrl) throws IOException {
         URL currentUrl = new URL(initialUrl);
         int redirects = 0;
         while (redirects < 8) {
@@ -378,15 +355,32 @@ public class JavaManagerPlugin extends Plugin {
         return currentUrl;
     }
 
-    private void downloadRangeInflated(URL url, long start, long size, File targetFile, String stepTitle, int pctBase, int pctSpan) throws IOException {
+    private static void downloadRangeInflatedInternal(URL url, long start, long size, File targetFile, String stepTitle, int pctBase, int pctSpan, JavaProgressListener listener) throws IOException {
         long end = start + size - 1L;
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
-        conn.setRequestProperty("Range", "bytes=" + start + "-" + end);
-        conn.setConnectTimeout(25000);
-        conn.setReadTimeout(120000);
-        conn.connect();
+        URL current = url;
+        HttpURLConnection conn = null;
+        int redirects = 0;
+        while (redirects < 6) {
+            conn = (HttpURLConnection) current.openConnection();
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+            conn.setRequestProperty("Range", "bytes=" + start + "-" + end);
+            conn.setConnectTimeout(25000);
+            conn.setReadTimeout(120000);
+            conn.setInstanceFollowRedirects(false);
+            conn.connect();
+            int code = conn.getResponseCode();
+            if (code == 301 || code == 302 || code == 307 || code == 308) {
+                String loc = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (loc == null) break;
+                current = new URL(loc);
+                redirects++;
+            } else {
+                break;
+            }
+        }
 
+        if (conn == null) throw new IOException("Failed to establish connection to " + url);
         int code = conn.getResponseCode();
         if (code != 206 && code != 200) {
             conn.disconnect();
@@ -408,14 +402,9 @@ public class JavaManagerPlugin extends Plugin {
                 if (now - lastNotify > 300) {
                     lastNotify = now;
                     int pct = pctBase + (int) Math.min(pctSpan, (totalRead * pctSpan / Math.max(1, size)));
-                    JSObject progress = new JSObject();
-                    progress.put("step", "java21");
-                    progress.put("status", stepTitle + " (" + pct + "%)");
-                    progress.put("percent", pct);
-                    progress.put("downloaded", totalRead);
-                    progress.put("total", size);
-                    notifyListeners("setup-progress", progress);
-                    notifyListeners("java-download-progress", progress);
+                    if (listener != null) {
+                        listener.onProgress(pct, stepTitle + " (" + pct + "%)");
+                    }
                 }
             }
             fos.flush();
@@ -587,10 +576,30 @@ public class JavaManagerPlugin extends Plugin {
 
     @PluginMethod
     public void getJavaSettings(PluginCall call) {
-        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String setting = prefs.getString(KEY_JAVA_SETTING, "auto");
+        String setting = "auto";
+        try {
+            File sdir = ServerProcessPlugin.getActiveServerDir(getContext());
+            File meta = new File(sdir, ".mcmeta.json");
+            if (meta.exists()) {
+                try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                    StringBuilder sb = new StringBuilder();
+                    String l;
+                    while ((l = br.readLine()) != null) sb.append(l);
+                    org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                    if (obj.has("javaVersion")) {
+                        setting = obj.getString("javaVersion");
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Throwable ignored) {}
+
+        if ("auto".equals(setting)) {
+            SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            setting = prefs.getString(KEY_JAVA_SETTING, "auto");
+        }
         JSObject ret = new JSObject();
         ret.put("setting", setting);
+        ret.put("configuredSetting", setting);
         ret.put("installedPath", getJavaBinary().getAbsolutePath());
         call.resolve(ret);
     }
@@ -600,13 +609,33 @@ public class JavaManagerPlugin extends Plugin {
         String setting = call.getString("setting", "auto");
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit().putString(KEY_JAVA_SETTING, setting).apply();
+
+        // Also persist in active server .mcmeta.json
+        try {
+            File sdir = ServerProcessPlugin.getActiveServerDir(getContext());
+            File meta = new File(sdir, ".mcmeta.json");
+            org.json.JSONObject obj = new org.json.JSONObject();
+            if (meta.exists()) {
+                try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
+                    StringBuilder sb = new StringBuilder();
+                    String l;
+                    while ((l = br.readLine()) != null) sb.append(l);
+                    obj = new org.json.JSONObject(sb.toString());
+                } catch (Exception ignored) {}
+            }
+            obj.put("javaVersion", setting);
+            try (FileWriter fw = new FileWriter(meta)) {
+                fw.write(obj.toString(2));
+            }
+        } catch (Throwable ignored) {}
+
         JSObject ret = new JSObject();
         ret.put("success", true);
         ret.put("setting", setting);
         call.resolve(ret);
     }
 
-    private void extractArchive(File archiveFile, File destDir) throws Exception {
+    public static void extractArchive(File archiveFile, File destDir) throws Exception {
         InputStream raw = new FileInputStream(archiveFile);
         InputStream decompressed;
         if (archiveFile.getName().endsWith(".xz")) {
@@ -666,7 +695,7 @@ public class JavaManagerPlugin extends Plugin {
         }
     }
 
-    private void copyFile(File src, File dst) throws IOException {
+    public static void copyFile(File src, File dst) throws IOException {
         try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
             byte[] buf = new byte[32768];
             int len;
@@ -676,7 +705,7 @@ public class JavaManagerPlugin extends Plugin {
         }
     }
 
-    private void setExecutableRecursive(File file) {
+    public static void setExecutableRecursive(File file) {
         if (file.isDirectory()) {
             File[] children = file.listFiles();
             if (children != null) {
@@ -694,7 +723,7 @@ public class JavaManagerPlugin extends Plugin {
         }
     }
 
-    private void deleteRecursive(File f) {
+    public static void deleteRecursive(File f) {
         if (f.isDirectory()) {
             File[] children = f.listFiles();
             if (children != null) {

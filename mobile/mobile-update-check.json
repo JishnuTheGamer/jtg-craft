@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
-  "versionCode": 1005,
+  "version": "1.0.6",
+  "versionCode": 1006,
   "releaseDate": "2026-09-29",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
@@ -17,6 +17,19 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.6",
+      "versionCode": 1006,
+      "date": "2026-09-29",
+      "type": "patch",
+      "title": "Java 21 Manual Override & Compact Console Banner v1.0.6",
+      "changes": [
+        "Enabled manual Java version override in Settings allowing MC 1.20.1 to run on Java 21 for modern plugin support",
+        "Added automatic background downloading and runtime installation of Java 21 ARM64 when configured",
+        "Streamlined console IP/network card into an ultra-compact slim strip maximizing vertical terminal log view",
+        "Added fallback to installed Java 17 runtime in case of network interruption during startup"
+      ]
+    },
     {
       "version": "1.0.5",
       "versionCode": 1005,
