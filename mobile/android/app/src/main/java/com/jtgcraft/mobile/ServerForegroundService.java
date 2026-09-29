@@ -45,7 +45,17 @@ public class ServerForegroundService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build();
 
-        startForeground(NOTIFICATION_ID, notification);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Throwable t) {
+            try {
+                startForeground(NOTIFICATION_ID, notification);
+            } catch (Throwable ignored) {}
+        }
 
         // Keep CPU awake while Minecraft server is running
         try {
@@ -59,6 +69,33 @@ public class ServerForegroundService extends Service {
         }
 
         return START_STICKY;
+    }
+
+    public static void updateStatus(Context ctx, String text) {
+        if (ctx == null) return;
+        try {
+            NotificationManager manager = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                Intent notificationIntent = new Intent(ctx, MainActivity.class);
+                notificationIntent.setAction(Intent.ACTION_MAIN);
+                notificationIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                PendingIntent pendingIntent = PendingIntent.getActivity(
+                        ctx,
+                        0,
+                        notificationIntent,
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0
+                );
+                Notification notification = new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                        .setContentTitle("Jtg-craft Server")
+                        .setContentText(text)
+                        .setSmallIcon(android.R.drawable.ic_media_play)
+                        .setContentIntent(pendingIntent)
+                        .setOngoing(true)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .build();
+                manager.notify(NOTIFICATION_ID, notification);
+            }
+        } catch (Throwable ignored) {}
     }
 
     @Override

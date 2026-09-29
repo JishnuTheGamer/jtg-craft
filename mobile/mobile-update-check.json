@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4",
-  "versionCode": 1004,
-  "releaseDate": "2026-09-16",
+  "version": "1.0.5",
+  "versionCode": 1005,
+  "releaseDate": "2026-09-29",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
   "baseUrl": "https://raw.githubusercontent.com/JishnuTheGamer/jtg-craft/main/",
@@ -17,6 +17,21 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.5",
+      "versionCode": 1005,
+      "date": "2026-09-29",
+      "type": "patch",
+      "title": "Server Properties Search, Safe Shutdown & OTA Engine v1.0.5",
+      "changes": [
+        "Added instant real-time search filter in Server Properties (online-mode, pvp, difficulty, port)",
+        "Added safe server world flush (save-all) and clean app exit on in-app update apply",
+        "Added dynamic GitHub OTA hot-patch loader running updates without APK reinstall",
+        "Eliminated Paper watchdog tick hang/crash and tuned JVM G1GC flags for stable Wi-Fi LAN join",
+        "Display server-allocated RAM limit (2048 MB) instead of physical mobile RAM in top header bar",
+        "Filtered cosmetic Android ARM64 OSHI Microarchitecture diagnostic warning from mobile console"
+      ]
+    },
     {
       "version": "1.0.4",
       "versionCode": 1004,

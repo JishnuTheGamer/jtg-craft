@@ -4,6 +4,7 @@
     <!-- Network permissions for Minecraft Server & Plugin downloads -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Foreground service & WakeLock to prevent server sleep -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -49,7 +50,11 @@
             android:name=".ServerForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Minecraft Paper Server Hosting" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

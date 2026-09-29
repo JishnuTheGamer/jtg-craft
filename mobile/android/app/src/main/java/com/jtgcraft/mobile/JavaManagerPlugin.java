@@ -14,6 +14,8 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 @CapacitorPlugin(name = "JavaManager")
 public class JavaManagerPlugin extends Plugin {
@@ -21,12 +23,26 @@ public class JavaManagerPlugin extends Plugin {
     private static final String PREFS_NAME = "jtg_java_prefs";
     private static final String KEY_JAVA_SETTING = "java_version_setting";
 
-    // Primary Android-native OpenJDK (ARM64 Bionic libc from PojavLauncher)
-    private static final String POJAV_JRE17_ARM64_URL = 
+    // Primary Android-native OpenJDK 17 (ARM64 Bionic libc from PojavLauncher)
+    private static final String POJAV_JRE17_ARM64_URL =
         "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre17-ec28559/jre17-arm64-20210825-release.tar.xz";
+
+    // PojavLauncher APK containing native OpenJDK 21 ARM64 and universal components
+    private static final String POJAV_APK_URL =
+        "https://github.com/PojavLauncherTeam/PojavLauncher/releases/download/gladiolus/PojavLauncher.apk";
+    private static final long POJAV_JRE21_BIN_OFFSET = 37238886L;
+    private static final long POJAV_JRE21_BIN_SIZE = 5399593L;
+    private static final long POJAV_JRE21_UNIV_OFFSET = 54702402L;
+    private static final long POJAV_JRE21_UNIV_SIZE = 23523014L;
 
     public File getJavaRootDir() {
         File d = new File(getContext().getFilesDir(), "java");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    public File getJava21RootDir() {
+        File d = new File(getContext().getFilesDir(), "java21");
         if (!d.exists()) d.mkdirs();
         return d;
     }
@@ -72,8 +88,57 @@ public class JavaManagerPlugin extends Plugin {
         return null;
     }
 
+    public static File getPersistentArchive21(Context ctx) {
+        if (ctx == null) return null;
+        try {
+            // Priority 1: App internal files directory
+            File f1 = new File(ctx.getFilesDir(), "jre21-android.tar.xz");
+            if (f1.exists() && f1.canRead() && f1.length() > 5000000) {
+                try (InputStream in = new FileInputStream(f1)) {
+                    if (in.read() != -1) return f1;
+                } catch (Throwable ignored) {}
+            }
+
+            // Priority 2: App external files directory
+            File extDir = ctx.getExternalFilesDir(null);
+            if (extDir != null) {
+                File f2 = new File(extDir, "jre21-android.tar.xz");
+                if (f2.exists() && f2.canRead() && f2.length() > 5000000) {
+                    try (InputStream in = new FileInputStream(f2)) {
+                        if (in.read() != -1) return f2;
+                    } catch (Throwable ignored) {}
+                }
+            }
+
+            // Priority 3: External public storage ONLY if canRead() and test read succeeds
+            File[] pubCandidates = new File[] {
+                new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/jre21-android.tar.xz"),
+                new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "jre21-android.tar.xz"),
+                new File("/storage/emulated/0/Download/JtgCraft/jre21-android.tar.xz"),
+                new File("/storage/emulated/0/Download/jre21-android.tar.xz"),
+                new File("/sdcard/Download/JtgCraft/jre21-android.tar.xz"),
+                new File("/sdcard/Download/jre21-android.tar.xz")
+            };
+            for (File f : pubCandidates) {
+                if (f != null && f.exists() && f.canRead() && f.length() > 5000000) {
+                    try (InputStream in = new FileInputStream(f)) {
+                        if (in.read() != -1) return f;
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
     public File getJavaBinary() {
-        File root = getJavaRootDir();
+        return findJavaBinaryInDir(getJavaRootDir());
+    }
+
+    public File getJava21Binary() {
+        return findJavaBinaryInDir(getJava21RootDir());
+    }
+
+    private File findJavaBinaryInDir(File root) {
         File direct = new File(root, "bin/java");
         if (direct.exists()) return direct;
 
@@ -84,22 +149,6 @@ public class JavaManagerPlugin extends Plugin {
                 if (nested.exists()) return nested;
             }
         }
-
-        // Check external PojavLauncher runtimes or persistent shared storage
-        try {
-            File[] externalPaths = new File[] {
-                new File("/storage/emulated/0/PojavLauncher/runtimes"),
-                new File("/sdcard/PojavLauncher/runtimes"),
-                new File(getContext().getExternalFilesDir(null), "java")
-            };
-            for (File ext : externalPaths) {
-                if (ext != null && ext.exists()) {
-                    File found = findJavaRecursively(ext, 3);
-                    if (found != null && found.exists()) return found;
-                }
-            }
-        } catch (Exception ignored) {}
-
         return direct;
     }
 
@@ -119,38 +168,48 @@ public class JavaManagerPlugin extends Plugin {
 
     @PluginMethod
     public void checkJava(PluginCall call) {
+        checkJavaVersion(call, 17);
+    }
+
+    @PluginMethod
+    public void checkJava21(PluginCall call) {
+        checkJavaVersion(call, 21);
+    }
+
+    private void checkJavaVersion(PluginCall call, int version) {
         try {
-            File javaBin = getJavaBinary();
+            File javaBin = (version == 21) ? getJava21Binary() : getJavaBinary();
             if (javaBin.exists() && (javaBin.canExecute() || javaBin.setExecutable(true, false))) {
                 JSObject ret = new JSObject();
                 ret.put("installed", true);
-                ret.put("version", "17");
+                ret.put("version", String.valueOf(version));
                 ret.put("path", javaBin.getAbsolutePath());
                 call.resolve(ret);
                 return;
             }
 
-            // Check if persistent archive is cached on phone storage (e.g. after app reinstall)
-            File archive = getPersistentArchive(getContext());
-            if (archive != null && archive.exists() && archive.canRead() && archive.length() > 10000000) {
-                try {
-                    File javaDir = getJavaRootDir();
-                    if (javaDir.exists()) deleteRecursive(javaDir);
-                    javaDir.mkdirs();
-                    extractArchive(archive, javaDir);
-                    setExecutableRecursive(javaDir);
-
-                    File recoveredBin = getJavaBinary();
-                    if (recoveredBin.exists()) {
-                        recoveredBin.setExecutable(true, false);
-                        JSObject ret = new JSObject();
-                        ret.put("installed", true);
-                        ret.put("version", "17");
-                        ret.put("path", recoveredBin.getAbsolutePath());
-                        call.resolve(ret);
-                        return;
-                    }
-                } catch (Throwable ignored) {}
+            // For Java 17, also check persistent archive cache
+            if (version == 17) {
+                File archive = getPersistentArchive(getContext());
+                if (archive != null && archive.exists() && archive.canRead() && archive.length() > 10000000) {
+                    try {
+                        File javaDir = getJavaRootDir();
+                        if (javaDir.exists()) deleteRecursive(javaDir);
+                        javaDir.mkdirs();
+                        extractArchive(archive, javaDir);
+                        setExecutableRecursive(javaDir);
+                        File recoveredBin = getJavaBinary();
+                        if (recoveredBin.exists()) {
+                            recoveredBin.setExecutable(true, false);
+                            JSObject ret = new JSObject();
+                            ret.put("installed", true);
+                            ret.put("version", "17");
+                            ret.put("path", recoveredBin.getAbsolutePath());
+                            call.resolve(ret);
+                            return;
+                        }
+                    } catch (Throwable ignored) {}
+                }
             }
 
             JSObject ret = new JSObject();
@@ -165,8 +224,213 @@ public class JavaManagerPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void installJava21(PluginCall call) {
+        new Thread(() -> {
+            File binArchive = null;
+            File univArchive = null;
+            try {
+                File java21Dir = getJava21RootDir();
+
+                // 1. Check if already installed
+                File existingBin = getJava21Binary();
+                if (existingBin.exists() && existingBin.canExecute()) {
+                    JSObject done = new JSObject();
+                    done.put("step", "java21");
+                    done.put("status", "Java 21 already installed");
+                    done.put("percent", 100);
+                    notifyListeners("setup-progress", done);
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("path", existingBin.getAbsolutePath());
+                    call.resolve(res);
+                    return;
+                }
+
+                // 2. Check local cached archive first
+                File cachedArchive = getPersistentArchive21(getContext());
+                if (cachedArchive != null) {
+                    JSObject extractNotify = new JSObject();
+                    extractNotify.put("step", "java21");
+                    extractNotify.put("status", "Extracting local Java 21 runtime...");
+                    extractNotify.put("percent", 50);
+                    notifyListeners("setup-progress", extractNotify);
+
+                    if (java21Dir.exists()) deleteRecursive(java21Dir);
+                    java21Dir.mkdirs();
+                    extractArchive(cachedArchive, java21Dir);
+                    setExecutableRecursive(java21Dir);
+
+                    File javaBin = getJava21Binary();
+                    if (javaBin.exists() && javaBin.canExecute()) {
+                        JSObject done = new JSObject();
+                        done.put("step", "java21");
+                        done.put("status", "Java 21 ARM64 Installed");
+                        done.put("percent", 100);
+                        notifyListeners("setup-progress", done);
+                        JSObject res = new JSObject();
+                        res.put("success", true);
+                        res.put("path", javaBin.getAbsolutePath());
+                        call.resolve(res);
+                        return;
+                    }
+                }
+
+                // 3. Download Java 21 components from official PojavLauncher Gladiolus release
+                JSObject startNotify = new JSObject();
+                startNotify.put("step", "java21");
+                startNotify.put("status", "Connecting to Java 21 repository...");
+                startNotify.put("percent", 5);
+                notifyListeners("setup-progress", startNotify);
+                notifyListeners("java-download-progress", startNotify);
+
+                URL finalUrl = resolveRedirects(POJAV_APK_URL);
+
+                // Step 1/2: Download & inflate bin-arm64 (5.4 MB)
+                binArchive = new File(getContext().getFilesDir(), "jre21-bin.tar.xz");
+                downloadRangeInflated(finalUrl, POJAV_JRE21_BIN_OFFSET, POJAV_JRE21_BIN_SIZE, binArchive, "Downloading Java 21 Binaries (1/2)", 5, 35);
+
+                // Step 2/2: Download & inflate universal (23.5 MB)
+                univArchive = new File(getContext().getFilesDir(), "jre21-univ.tar.xz");
+                downloadRangeInflated(finalUrl, POJAV_JRE21_UNIV_OFFSET, POJAV_JRE21_UNIV_SIZE, univArchive, "Downloading Java 21 Libraries (2/2)", 35, 75);
+
+                // Step 3: Extract both into java21Dir
+                JSObject extractNotify = new JSObject();
+                extractNotify.put("step", "java21");
+                extractNotify.put("status", "Extracting Java 21 runtime...");
+                extractNotify.put("percent", 80);
+                notifyListeners("setup-progress", extractNotify);
+                notifyListeners("java-download-progress", extractNotify);
+
+                if (java21Dir.exists()) deleteRecursive(java21Dir);
+                java21Dir.mkdirs();
+
+                extractArchive(binArchive, java21Dir);
+
+                JSObject extractNotify2 = new JSObject();
+                extractNotify2.put("step", "java21");
+                extractNotify2.put("status", "Extracting Java 21 libraries...");
+                extractNotify2.put("percent", 90);
+                notifyListeners("setup-progress", extractNotify2);
+                notifyListeners("java-download-progress", extractNotify2);
+
+                extractArchive(univArchive, java21Dir);
+
+                setExecutableRecursive(java21Dir);
+
+                File javaBin = getJava21Binary();
+                if (!javaBin.exists()) {
+                    throw new IOException("Java 21 binary not found after extraction");
+                }
+
+                // Delete temporary download archives to free disk space
+                if (binArchive.exists()) binArchive.delete();
+                if (univArchive.exists()) univArchive.delete();
+
+                // Notify done
+                JSObject doneNotify = new JSObject();
+                doneNotify.put("step", "java21");
+                doneNotify.put("status", "Java 21 ARM64 Installed");
+                doneNotify.put("percent", 100);
+                notifyListeners("setup-progress", doneNotify);
+                notifyListeners("java-download-progress", doneNotify);
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("path", javaBin.getAbsolutePath());
+                call.resolve(res);
+
+            } catch (Exception e) {
+                if (binArchive != null && binArchive.exists()) binArchive.delete();
+                if (univArchive != null && univArchive.exists()) univArchive.delete();
+
+                JSObject errNotify = new JSObject();
+                errNotify.put("step", "java21");
+                errNotify.put("status", "Java 21 install failed: " + e.getMessage());
+                errNotify.put("percent", 0);
+                notifyListeners("setup-progress", errNotify);
+                call.reject("Failed to install Java 21: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private URL resolveRedirects(String initialUrl) throws IOException {
+        URL currentUrl = new URL(initialUrl);
+        int redirects = 0;
+        while (redirects < 8) {
+            HttpURLConnection conn = (HttpURLConnection) currentUrl.openConnection();
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(25000);
+            conn.setReadTimeout(60000);
+            conn.connect();
+            int code = conn.getResponseCode();
+            if (code == 301 || code == 302 || code == 307 || code == 308) {
+                String loc = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (loc == null) break;
+                currentUrl = new URL(loc);
+                redirects++;
+            } else {
+                conn.disconnect();
+                break;
+            }
+        }
+        return currentUrl;
+    }
+
+    private void downloadRangeInflated(URL url, long start, long size, File targetFile, String stepTitle, int pctBase, int pctSpan) throws IOException {
+        long end = start + size - 1L;
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
+        conn.setRequestProperty("Range", "bytes=" + start + "-" + end);
+        conn.setConnectTimeout(25000);
+        conn.setReadTimeout(120000);
+        conn.connect();
+
+        int code = conn.getResponseCode();
+        if (code != 206 && code != 200) {
+            conn.disconnect();
+            throw new IOException("HTTP " + code + " on range request " + start + "-" + end);
+        }
+
+        try (InputStream raw = conn.getInputStream();
+             InflaterInputStream iis = new InflaterInputStream(raw, new Inflater(true));
+             FileOutputStream fos = new FileOutputStream(targetFile)) {
+
+            byte[] buf = new byte[32768];
+            int n;
+            long totalRead = 0;
+            long lastNotify = 0;
+            while ((n = iis.read(buf)) != -1) {
+                fos.write(buf, 0, n);
+                totalRead += n;
+                long now = System.currentTimeMillis();
+                if (now - lastNotify > 300) {
+                    lastNotify = now;
+                    int pct = pctBase + (int) Math.min(pctSpan, (totalRead * pctSpan / Math.max(1, size)));
+                    JSObject progress = new JSObject();
+                    progress.put("step", "java21");
+                    progress.put("status", stepTitle + " (" + pct + "%)");
+                    progress.put("percent", pct);
+                    progress.put("downloaded", totalRead);
+                    progress.put("total", size);
+                    notifyListeners("setup-progress", progress);
+                    notifyListeners("java-download-progress", progress);
+                }
+            }
+            fos.flush();
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    @PluginMethod
     public void installJava(PluginCall call) {
         String version = call.getString("version", "17");
+        if ("21".equals(version)) {
+            installJava21(call);
+            return;
+        }
         new Thread(() -> {
             HttpURLConnection conn = null;
             InputStream in = null;

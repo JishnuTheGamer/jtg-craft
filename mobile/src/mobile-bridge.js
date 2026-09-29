@@ -361,6 +361,7 @@
     hookListener(ServerProcess, 'console-data');
     hookListener(ServerProcess, 'server-state');
     hookListener(ServerProcess, 'setup-progress');
+    hookListener(ServerProcess, 'download-progress');
     hookListener(JavaManager, 'setup-progress');
     hookListener(JavaManager, 'java-download-progress');
     hookListener(JavaManager, 'download-progress');
@@ -381,6 +382,22 @@
                     const res = await JavaManager.checkJava({ dir });
                     return {
                         found: !!res.installed,
+                        version: res.version || '17',
+                        portable: true,
+                        path: res.path || ''
+                    };
+                }
+                return { found: false, version: '' };
+            } catch (e) {
+                return { found: false, version: '' };
+            }
+        },
+        checkJava21: async () => {
+            try {
+                if (JavaManager.checkJava21) {
+                    const res = await JavaManager.checkJava21();
+                    return {
+                        found: !!res.installed,
                         version: res.version || '21',
                         portable: true,
                         path: res.path || ''
@@ -392,7 +409,7 @@
             }
         },
         installJava: async (opts) => {
-            const ver = (typeof opts === 'object' && opts.version) ? opts.version : (typeof opts === 'string' && opts.match(/^\d+$/) ? opts : '21');
+            const ver = (typeof opts === 'object' && opts.version) ? opts.version : (typeof opts === 'string' && opts.match(/^\d+$/) ? opts : '17');
             if (JavaManager.installJava) {
                 const res = await JavaManager.installJava({ version: String(ver) });
                 if (res && res.success === false) {
@@ -401,6 +418,17 @@
                 return res;
             }
             return { success: true };
+        },
+        installJava21: async () => {
+            if (JavaManager.installJava21) {
+                const res = await JavaManager.installJava21();
+                if (res && res.success === false) {
+                    throw new Error(res.error || 'Java 21 installation failed');
+                }
+                return res;
+            }
+            // Fallback: route through installJava with version=21
+            return window.api.installJava({ version: '21' });
         },
         getJavaSettings: async () => {
             try {
@@ -456,17 +484,25 @@
         },
         getLiveStats: async () => {
             try {
+                if (ServerProcess.getLiveStats) {
+                    const res = await ServerProcess.getLiveStats();
+                    return {
+                        cpuPercent: String(res.cpuPercent || '0.0'),
+                        ramUsedMB: res.ramUsedMB !== undefined ? res.ramUsedMB : 0,
+                        ramTotalMB: res.ramTotalMB || 2048
+                    };
+                }
                 if (SystemInfo.getLiveStats) {
                     const res = await SystemInfo.getLiveStats();
                     return {
-                        cpuPercent: String(res.cpuPercent || '5.0'),
-                        ramUsedMB: res.usedMemMB || 300,
-                        ramTotalMB: res.totalMemMB || 1024
+                        cpuPercent: String(res.cpuPercent || '0.0'),
+                        ramUsedMB: res.usedMemMB || 0,
+                        ramTotalMB: 2048
                     };
                 }
-                return { cpuPercent: '5.0', ramUsedMB: 300, ramTotalMB: 1024 };
+                return { cpuPercent: '0.0', ramUsedMB: 0, ramTotalMB: 2048 };
             } catch (e) {
-                return { cpuPercent: '5.0', ramUsedMB: 300, ramTotalMB: 1024 };
+                return { cpuPercent: '0.0', ramUsedMB: 0, ramTotalMB: 2048 };
             }
         },
         checkDiskSpace: async (dir) => {
@@ -490,6 +526,30 @@
                 return { inUse: false };
             } catch (e) {
                 return { inUse: false };
+            }
+        },
+        getNetworkInfo: async () => {
+            try {
+                if (SystemInfo.getNetworkInfo) {
+                    return await SystemInfo.getNetworkInfo();
+                }
+                return {
+                    localIp: '127.0.0.1',
+                    lanIp: '127.0.0.1',
+                    port: 25565,
+                    sameDeviceJoin: '127.0.0.1:25565',
+                    lanJoin: '127.0.0.1:25565',
+                    hotspotJoin: '192.168.43.1:25565'
+                };
+            } catch (e) {
+                return {
+                    localIp: '127.0.0.1',
+                    lanIp: '127.0.0.1',
+                    port: 25565,
+                    sameDeviceJoin: '127.0.0.1:25565',
+                    lanJoin: '127.0.0.1:25565',
+                    hotspotJoin: '192.168.43.1:25565'
+                };
             }
         },
 
@@ -591,6 +651,10 @@
             if (ServerProcess.stop) return ServerProcess.stop();
             return Promise.resolve({ success: true });
         },
+        serverRestart: () => {
+            if (ServerProcess.restart) return ServerProcess.restart();
+            return Promise.resolve({ success: true });
+        },
         serverKill: () => {
             if (ServerProcess.kill) return ServerProcess.kill();
             return Promise.resolve({ success: true });
@@ -638,6 +702,45 @@
                 return '/data/data/com.jtgcraft.mobile/files/servers/default';
             } catch (e) {
                 return '/data/data/com.jtgcraft.mobile/files/servers/default';
+            }
+        },
+
+        checkStoragePermission: async () => {
+            try {
+                if (FileManager.checkStoragePermission) {
+                    return await FileManager.checkStoragePermission();
+                }
+                return { granted: true, isAllFilesAccess: true };
+            } catch (e) {
+                return { granted: false, error: e.message };
+            }
+        },
+        requestStoragePermission: async () => {
+            try {
+                if (FileManager.requestStoragePermission) {
+                    return await FileManager.requestStoragePermission();
+                }
+                return { openedSettings: false };
+            } catch (e) {
+                return { openedSettings: false, error: e.message };
+            }
+        },
+        getDefaultStoragePaths: async () => {
+            try {
+                if (FileManager.getDefaultStoragePaths) {
+                    return await FileManager.getDefaultStoragePaths();
+                }
+                return {
+                    phoneStorage: '/storage/emulated/0/JtgCraft/server',
+                    downloads: '/storage/emulated/0/Download/JtgCraft/server',
+                    appStorage: '/data/data/com.jtgcraft.mobile/files/servers/default'
+                };
+            } catch (e) {
+                return {
+                    phoneStorage: '/storage/emulated/0/JtgCraft/server',
+                    downloads: '/storage/emulated/0/Download/JtgCraft/server',
+                    appStorage: '/data/data/com.jtgcraft.mobile/files/servers/default'
+                };
             }
         },
 
@@ -1094,12 +1197,47 @@
                     localStorage.setItem('installed_ota_version', manifest.version);
                 }
 
-                return { success: true, updatedFiles: updated, version: manifest.version || '1.0.4', versionCode: manifest.versionCode || 1004 };
+                return { success: true, updatedFiles: updated, version: manifest.version || '1.0', versionCode: manifest.versionCode || 1 };
             } catch (e) {
                 return { error: 'Failed to apply data-center update: ' + e.message };
             }
         },
-        relaunchApp: () => {
+        exitApp: async () => {
+            try {
+                if (ServerProcess && ServerProcess.stop) {
+                    await ServerProcess.stop().catch(() => {});
+                }
+            } catch (_) {}
+            try {
+                if (CapApp && CapApp.exitApp) {
+                    return await CapApp.exitApp();
+                }
+            } catch (_) {}
+            try {
+                if (navigator.app && navigator.app.exitApp) {
+                    navigator.app.exitApp();
+                    return;
+                }
+            } catch (_) {}
+            try { window.close(); } catch (_) {}
+        },
+        relaunchApp: async () => {
+            try {
+                if (ServerProcess && ServerProcess.stop) {
+                    await ServerProcess.stop().catch(() => {});
+                }
+            } catch (_) {}
+            try {
+                if (CapApp && CapApp.exitApp) {
+                    return await CapApp.exitApp();
+                }
+            } catch (_) {}
+            try {
+                if (navigator.app && navigator.app.exitApp) {
+                    navigator.app.exitApp();
+                    return;
+                }
+            } catch (_) {}
             window.location.reload();
             return Promise.resolve();
         },

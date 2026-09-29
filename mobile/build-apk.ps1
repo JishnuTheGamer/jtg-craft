@@ -97,11 +97,16 @@ Set-Content -Path $localProps -Value "sdk.dir=$escapedSdkDir"
 Write-Host "Configured $localProps" -ForegroundColor Green
 
 # ── 5. Assemble Debug APK ────────────────────────────────────
-Write-Host "`n[5/5] Compiling Android APK with Gradle..." -ForegroundColor Cyan
+$builtApk = Join-Path $ScriptDir "android\app\build\outputs\apk\debug\app-debug.apk"
+if (Test-Path $builtApk) { Remove-Item $builtApk -Force }
+
 $androidDir = Join-Path $ScriptDir "android"
 Push-Location $androidDir
 try {
     .\gradlew.bat assembleDebug --stacktrace
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle build failed with exit code $LASTEXITCODE"
+    }
 } finally {
     Pop-Location
 }
@@ -109,7 +114,7 @@ try {
 # ── 6. Copy Finished APK to mobile\apk\ ──────────────────────
 $builtApk = Join-Path $ScriptDir "android\app\build\outputs\apk\debug\app-debug.apk"
 if (Test-Path $builtApk) {
-    $targetApk = Join-Path $ApkOutDir "jtg-craft-mobile-v1.0.4.apk"
+    $targetApk = Join-Path $ApkOutDir "jtg-craft-mobile-v1.apk"
     Copy-Item -Path $builtApk -Destination $targetApk -Force
     
     Write-Host "`n========================================================" -ForegroundColor Green

@@ -866,11 +866,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .pm-action-btn.ip:hover { background: rgba(168, 85, 247, 0.2); }
 
 /* ── Server Properties ───────────────────────────────────── */
+.props-toolbar {
+    margin-bottom: 14px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.props-search-inp {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-0);
+    font-size: 14px;
+    outline: none;
+    transition: all var(--transition);
+}
+.props-search-inp:focus {
+    border-color: var(--green-400);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
 .props-form {
     display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
     overflow-y: auto; flex: 1; padding: 4px;
 }
-.prop-field { display: flex; flex-direction: column; }
+.prop-field { display: flex; flex-direction: column; transition: opacity 0.15s ease; }
 .prop-field label {
     font-size: 11px; color: var(--text-2); margin-bottom: 8px;
     font-weight: 600; letter-spacing: 0.5px;

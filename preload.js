@@ -30,8 +30,10 @@ contextBridge.exposeInMainWorld('api', {
     createServer:  (opts) => ipcRenderer.invoke('create-server', opts),
     serverStart:   ()     => ipcRenderer.invoke('server-start'),
     serverStop:    ()     => ipcRenderer.invoke('server-stop'),
+    serverRestart: ()     => ipcRenderer.invoke('server-restart'),
     serverKill:    ()     => ipcRenderer.invoke('server-kill'),
     serverCommand: (cmd)  => ipcRenderer.invoke('server-command', cmd),
+    getNetworkInfo: ()    => ipcRenderer.invoke('get-network-info'),
 
     serverReinstall:     () => ipcRenderer.invoke('reinstall-server'),
     serverChangeVersion: (ver) => ipcRenderer.invoke('change-version', ver),

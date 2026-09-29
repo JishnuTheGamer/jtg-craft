@@ -87,153 +87,185 @@ document.addEventListener('DOMContentLoaded', async () => {
     sldRam.oninput = () => { $('#lbl-ram').textContent = sldRam.value; };
     sldCpu.oninput = () => { $('#lbl-cpu').textContent = sldCpu.value; };
 
-    // ── Saved directory (localStorage) ──────────────────────
+    // ── Opening Splash Screen Dismissal ─────────────────────
+    function dismissSplashScreen() {
+        const splash = document.getElementById('mobile-splash-screen');
+        if (!splash || splash.dataset.dismissed) return;
+        splash.dataset.dismissed = 'true';
+        splash.classList.add('fade-out');
+        setTimeout(() => {
+            splash.style.display = 'none';
+            try { splash.remove(); } catch (_) {}
+        }, 650);
+    }
+
+    // Safety fallback: guaranteed dismiss after 2.5s maximum
+    setTimeout(dismissSplashScreen, 2500);
+
+    // ── Saved directory & version state ─────────────────────
     let savedDir = localStorage.getItem('jtg-install-dir') || '';
     let paperVersions = [];
 
+    // ── Storage Permission Check & Banner ───────────────────
+    async function checkAndDisplayStorageBanner(dir) {
+        const banner = $('#storage-perm-banner');
+        if (!banner) return;
+        const targetDir = dir || ($('#inp-dir') ? $('#inp-dir').value.trim() : '') || savedDir || '';
+        const isExternalStorage = targetDir.startsWith('/storage/emulated/0') || targetDir.startsWith('/sdcard') || targetDir.includes('/storage/');
+        if (!isExternalStorage) {
+            banner.classList.add('hidden');
+            return;
+        }
+        try {
+            if (window.api && window.api.checkStoragePermission) {
+                const perm = await window.api.checkStoragePermission();
+                if (perm && perm.granted) {
+                    banner.classList.add('hidden');
+                    return;
+                }
+            }
+        } catch (_) {}
+        banner.classList.remove('hidden');
+    }
+
+    const btnGrantStorage = $('#btn-grant-storage');
+    if (btnGrantStorage) {
+        btnGrantStorage.onclick = async () => {
+            btnGrantStorage.disabled = true;
+            btnGrantStorage.textContent = 'Opening Settings...';
+            try {
+                await window.api.requestStoragePermission();
+            } catch (e) {
+                toast('Please grant All Files Access: ' + (e.message || e), 'warn');
+            }
+            setTimeout(() => {
+                btnGrantStorage.disabled = false;
+                btnGrantStorage.textContent = 'Grant Permission';
+                checkAndDisplayStorageBanner();
+            }, 1200);
+        };
+    }
+
+    window.addEventListener('focus', () => checkAndDisplayStorageBanner());
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkAndDisplayStorageBanner();
+    });
+
     // ── Setup progress listener ─────────────────────────────
     window.api.onSetupProgress(data => {
-        if (data.step === 'java') {
-            $('#step-java-status').textContent = data.status;
-            $('#setup-java-bar').style.width = data.percent + '%';
+        const statusEl = $('#create-status') || $('#step-java-status');
+        const barEl = $('#create-bar') || $('#setup-java-bar');
+        if (statusEl && data.status) statusEl.textContent = data.status;
+        if (barEl && data.percent !== undefined) barEl.style.width = data.percent + '%';
+        if (data.step === 'java' || data.step === 'java21') {
+            const sj = $('#step-java-status');
+            const sb = $('#setup-java-bar');
+            if (sj) sj.textContent = data.status;
+            if (sb) sb.style.width = data.percent + '%';
         }
     });
 
     // ══════════════════════════════════════════════════════════
-    //  WELCOME SCREEN
+    //  BOOT SEQUENCE (Direct to Server Menu or Dashboard)
     // ══════════════════════════════════════════════════════════
-    $('#btn-get-started').onclick = async () => {
-        // If no dir saved, ask user to pick
-        if (!savedDir) {
-            savedDir = await window.api.pickDirectory();
-            if (!savedDir) return;
-            localStorage.setItem('jtg-install-dir', savedDir);
-        }
-
-        // Check disk space
-        const disk = await window.api.checkDiskSpace(savedDir);
-        if (!disk.ok) {
-            toast(`Low disk space (${disk.freeGB} GB free). Need at least 2 GB.`, 'error');
-            return;
-        }
-
-        // Check if server already exists
-        const check = await window.api.checkExistingServer(savedDir);
-        if (check.exists) {
-            // Jump straight to dashboard
-            $('#sidebar-server-name').textContent = check.name;
-            const drName = $('#drawer-server-name');
-            if (drName) drName.textContent = check.name;
-            initDashboard();
-            showScreen('screen-dashboard');
-        } else {
-            // Run automated setup
-            showScreen('screen-setup');
-            await runAutoSetup();
-        }
-    };
-
-    // ══════════════════════════════════════════════════════════
-    //  AUTO SETUP FLOW
-    // ══════════════════════════════════════════════════════════
-    async function runAutoSetup() {
-        const stepJava = $('#step-java');
-        const stepPaper = $('#step-paper');
-
-        // ── Step 1: Java ──────────────────────────
-        stepJava.classList.add('active');
-        $('#step-java-icon').textContent = '⏳';
-        $('#step-java-icon').classList.add('spinning');
-        $('#step-java-status').textContent = 'Checking Java...';
-        $('#setup-overall-label').textContent = 'Checking Java installation...';
-
+    async function initAppOnStartup() {
         try {
-            const javaCheck = await window.api.checkJava(savedDir);
-
-            if (javaCheck.found) {
-                // Java already available
-                $('#step-java-icon').textContent = '✅';
-                $('#step-java-icon').classList.remove('spinning');
-                $('#step-java-status').textContent = javaCheck.portable ? 'Portable Java found' : `System Java ${javaCheck.version}`;
-                $('#setup-java-bar').style.width = '100%';
-                stepJava.classList.remove('active');
-                stepJava.classList.add('done');
-            } else {
-                // Need to download Java
-                $('#step-java-status').textContent = 'Downloading...';
-                $('#setup-overall-label').textContent = 'Downloading Java 21 JRE (this may take a few minutes)...';
-
-                const result = await window.api.installJava(savedDir);
-
-                $('#step-java-icon').textContent = '✅';
-                $('#step-java-icon').classList.remove('spinning');
-                $('#step-java-status').textContent = result.alreadyInstalled ? 'Already installed' : 'Installed successfully';
-                $('#setup-java-bar').style.width = '100%';
-                stepJava.classList.remove('active');
-                stepJava.classList.add('done');
+            // 1. Resolve preferred default storage paths (/storage/emulated/0/JtgCraft/server)
+            let storagePaths = null;
+            if (window.api && window.api.getDefaultStoragePaths) {
+                storagePaths = await window.api.getDefaultStoragePaths().catch(() => null);
             }
-        } catch (e) {
-            $('#step-java-icon').textContent = '❌';
-            $('#step-java-icon').classList.remove('spinning');
-            $('#step-java-status').textContent = 'Failed';
-            stepJava.classList.remove('active');
-            stepJava.classList.add('error');
-            toast('Java installation failed: ' + e.message, 'error');
-            $('#setup-overall-label').textContent = 'Setup failed. Please try again.';
-            return;
-        }
 
-        // ── Step 2: Fetch Paper versions ──────────
-        stepPaper.classList.add('active');
-        $('#step-paper-icon').textContent = '⏳';
-        $('#step-paper-icon').classList.add('spinning');
-        $('#step-paper-status').textContent = 'Fetching...';
-        $('#setup-overall-label').textContent = 'Fetching Paper server versions...';
+            if (!savedDir) {
+                savedDir = (storagePaths && storagePaths.phoneStorage) ? storagePaths.phoneStorage : '/storage/emulated/0/JtgCraft/server';
+                localStorage.setItem('jtg-install-dir', savedDir);
+            }
 
-        try {
-            paperVersions = await window.api.fetchPaperVersions();
+            if ($('#inp-dir')) {
+                $('#inp-dir').value = savedDir;
+            }
 
-            $('#step-paper-icon').textContent = '✅';
-            $('#step-paper-icon').classList.remove('spinning');
-            $('#step-paper-status').textContent = `${paperVersions.length} versions found`;
-            $('#setup-paper-bar').style.width = '100%';
-            stepPaper.classList.remove('active');
-            stepPaper.classList.add('done');
-        } catch (e) {
-            $('#step-paper-icon').textContent = '❌';
-            $('#step-paper-icon').classList.remove('spinning');
-            $('#step-paper-status').textContent = 'Failed';
-            stepPaper.classList.remove('active');
-            stepPaper.classList.add('error');
-            toast('Failed to fetch Paper versions: ' + e.message, 'error');
-            $('#setup-overall-label').textContent = 'Setup failed. Please try again.';
-            return;
-        }
+            // 2. Check if a server already exists
+            const check = await window.api.checkExistingServer(savedDir).catch(() => ({ exists: false }));
+            if (check && check.exists) {
+                // Existing server detected -> Jump directly to dashboard
+                const sName = check.name || 'Jtg Server';
+                $('#sidebar-server-name').textContent = sName;
+                const drName = $('#drawer-server-name');
+                if (drName) drName.textContent = sName;
+                initDashboard();
+                showScreen('screen-dashboard');
+                setTimeout(dismissSplashScreen, 1800);
+                return;
+            }
 
-        // ── All done → go to create screen ────────
-        $('#setup-overall-label').textContent = 'All set! Proceeding to server creation...';
-
-        setTimeout(() => {
-            // Populate versions in create screen
-            const sel = $('#sel-version');
-            sel.innerHTML = '';
-            paperVersions.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v; opt.textContent = v;
-                sel.appendChild(opt);
-            });
-            sel.disabled = false;
-
-            $('#inp-dir').value = savedDir;
+            // 3. No server yet -> Show Server Creation menu directly (as requested)
             showScreen('screen-create');
-        }, 800);
+            checkAndDisplayStorageBanner(savedDir);
+            setTimeout(dismissSplashScreen, 1800);
+
+            // 4. Background fetch latest Paper versions to enhance version dropdown
+            if (window.api && window.api.fetchPaperVersions) {
+                window.api.fetchPaperVersions().then(versions => {
+                    if (versions && versions.length > 0) {
+                        paperVersions = versions;
+                        const sel = $('#sel-version');
+                        if (sel) {
+                            const curVal = sel.value;
+                            sel.innerHTML = '';
+                            versions.forEach(v => {
+                                const opt = document.createElement('option');
+                                opt.value = v;
+                                const isJ21 = (v.startsWith('1.21') || v.startsWith('1.22'));
+                                opt.textContent = `Paper ${v} ${isJ21 ? '(Requires Java 21)' : '(Requires Java 17)'}`;
+                                sel.appendChild(opt);
+                            });
+                            if (curVal && versions.includes(curVal)) {
+                                sel.value = curVal;
+                            }
+                        }
+                    }
+                }).catch(() => {});
+            }
+
+        } catch (err) {
+            console.error('Startup initialization error:', err);
+            showScreen('screen-create');
+            setTimeout(dismissSplashScreen, 1800);
+        }
     }
+
+    // ══════════════════════════════════════════════════════════
+    //  WELCOME & CREATE SCREEN HELPERS
+    // ══════════════════════════════════════════════════════════
+    function resetCreateScreen() {
+        const btn = $('#btn-create');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Create &amp; Launch Server`;
+        }
+        const progressBox = $('#create-progress');
+        if (progressBox) progressBox.classList.add('hidden');
+        const barEl = $('#create-bar');
+        if (barEl) barEl.style.width = '0%';
+        const statusEl = $('#create-status');
+        if (statusEl) statusEl.textContent = '';
+        if ($('#inp-name') && (!($('#inp-name').value) || !($('#inp-name').value.trim()))) {
+            $('#inp-name').value = 'Jtg Server';
+        }
+    }
+
+    $('#btn-get-started').onclick = async () => {
+        resetCreateScreen();
+        showScreen('screen-create');
+        checkAndDisplayStorageBanner(savedDir);
+    };
 
     // ══════════════════════════════════════════════════════════
     //  CREATE SCREEN
     // ══════════════════════════════════════════════════════════
     $('#btn-pick-dir').onclick = async () => {
-        const currentVal = $('#inp-dir').value.trim() || savedDir || '/data/data/com.jtgcraft.mobile/files/servers/default';
+        const currentVal = $('#inp-dir').value.trim() || savedDir || '/storage/emulated/0/JtgCraft/server';
         const customPrompt = prompt('Enter or edit server install folder path:', currentVal);
         if (customPrompt && customPrompt.trim()) {
             const dir = await window.api.pickDirectory(customPrompt.trim());
@@ -241,6 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 savedDir = dir;
                 localStorage.setItem('jtg-install-dir', savedDir);
                 $('#inp-dir').value = dir;
+                checkAndDisplayStorageBanner(savedDir);
             }
         }
     };
@@ -252,6 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (val) {
                 savedDir = val;
                 localStorage.setItem('jtg-install-dir', val);
+                checkAndDisplayStorageBanner(val);
             }
         };
     }
@@ -264,18 +298,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             savedDir = chosen;
             localStorage.setItem('jtg-install-dir', chosen);
             $('#inp-dir').value = chosen;
+            checkAndDisplayStorageBanner(chosen);
             if (window.api && window.api.pickDirectory) {
                 await window.api.pickDirectory(chosen);
             }
         };
     });
 
-    // Download progress
-    window.api.onDownloadProgress(pct => {
-        $('#create-bar').style.width = pct + '%';
-        $('#create-status').textContent = `Downloading... ${pct}%`;
+    // Download progress listener
+    window.api.onDownloadProgress(data => {
+        const pct = (typeof data === 'object' && data !== null) ? (data.percent || data.pct || 0) : data;
+        const createBar = $('#create-bar');
+        const createStatus = $('#create-status');
+        if (createBar) createBar.style.width = pct + '%';
+        if (createStatus) createStatus.textContent = (typeof data === 'object' && data.status) ? data.status : `Downloading... ${pct}%`;
     });
 
+    // On-demand installation and server creation
     $('#btn-create').onclick = async () => {
         const name = $('#inp-name').value.trim();
 
@@ -285,21 +324,66 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        if (!savedDir) {
-            toast('Please choose an install directory first.', 'error');
-            return;
-        }
+        const chosenDir = $('#inp-dir').value.trim() || savedDir || '/storage/emulated/0/JtgCraft/server';
+        savedDir = chosenDir;
+        localStorage.setItem('jtg-install-dir', savedDir);
 
         const version = $('#sel-version').value;
         if (!version) { toast('Select a Paper version.', 'error'); return; }
 
+        // Check storage permission if installing to external public storage
+        if (chosenDir.startsWith('/storage/emulated/0') || chosenDir.includes('/storage/')) {
+            try {
+                const perm = await window.api.checkStoragePermission();
+                if (perm && !perm.granted) {
+                    toast('Storage permission needed to create server in Phone Storage.', 'warn');
+                    $('#storage-perm-banner').classList.remove('hidden');
+                    await window.api.requestStoragePermission();
+                    return;
+                }
+            } catch (_) {}
+        }
+
         const btn = $('#btn-create');
         btn.disabled = true;
 
+        const progressBox = $('#create-progress');
+        const statusEl = $('#create-status');
+        const barEl = $('#create-bar');
+
+        if (progressBox) progressBox.classList.remove('hidden');
+        if (barEl) barEl.style.width = '0%';
+
         try {
-            // Download Paper jar directly
-            $('#create-progress').classList.remove('hidden');
-            $('#create-status').textContent = `Downloading Paper ${version}...`;
+            // Determine Java requirement: MC 1.21+ needs Java 21, MC <= 1.20 needs Java 17
+            const parts = version.split('.').map(p => parseInt(p, 10) || 0);
+            const major = parts[0] || 1;
+            const minor = parts[1] || 0;
+            const needsJava21 = (major === 1 && minor >= 21) || major > 1;
+
+            if (needsJava21) {
+                if (statusEl) statusEl.textContent = `Checking Java 21 (required for Paper ${version})...`;
+                const j21 = await window.api.checkJava21().catch(() => ({ found: false }));
+                if (!j21.found) {
+                    if (statusEl) statusEl.textContent = 'Downloading Java 21 ARM64 runtime...';
+                    if (barEl) barEl.style.width = '10%';
+                    toast(`Installing Java 21 ARM64 for Minecraft ${version}...`, 'info');
+                    await window.api.installJava21();
+                }
+            } else {
+                if (statusEl) statusEl.textContent = `Checking Java 17 (required for Paper ${version})...`;
+                const j17 = await window.api.checkJava(savedDir).catch(() => ({ found: false }));
+                if (!j17.found) {
+                    if (statusEl) statusEl.textContent = 'Downloading Java 17 ARM64 runtime...';
+                    if (barEl) barEl.style.width = '10%';
+                    toast(`Installing Java 17 ARM64 for Minecraft ${version}...`, 'info');
+                    await window.api.installJava({ version: '17' });
+                }
+            }
+
+            // Download Paper jar directly & initialize server
+            if (statusEl) statusEl.textContent = `Downloading Paper ${version}...`;
+            if (barEl) barEl.style.width = '30%';
 
             await window.api.createServer({
                 dir: savedDir,
@@ -309,19 +393,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 version: version
             });
 
-            toast('Server created successfully!');
+            toast('Server created successfully in Phone Storage!');
             $('#sidebar-server-name').textContent = name;
             const drName = $('#drawer-server-name');
             if (drName) drName.textContent = name;
+            resetCreateScreen();
             initDashboard();
             showScreen('screen-dashboard');
 
-            // Auto-start
-            setTimeout(() => startServer(), 500);
+            // Auto-start server
+            setTimeout(() => startServer(), 600);
 
         } catch (e) {
             toast(e.message || 'Server creation failed', 'error');
-            btn.disabled = false;
+            if (statusEl) statusEl.textContent = 'Creation failed: ' + (e.message || 'Unknown error');
+            if (btn) btn.disabled = false;
         }
     };
 
@@ -373,7 +459,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const s = await window.api.getLiveStats();
                 $('#live-cpu').textContent = s.cpuPercent + '%';
                 $('#live-ram').textContent = `${s.ramUsedMB} / ${s.ramTotalMB} MB`;
-                $('#cpu-bar').style.width = s.cpuPercent + '%';
+                const ramPct = s.ramTotalMB > 0 ? Math.min(100, Math.round((s.ramUsedMB * 100) / s.ramTotalMB)) : 0;
+                $('#cpu-bar').style.width = ramPct + '%';
 
                 const drawerCpu = $('#drawer-live-cpu');
                 if (drawerCpu) drawerCpu.textContent = s.cpuPercent + '%';
@@ -410,7 +497,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         const txt = $('#drawer-status-text');
         if (dot) dot.classList.toggle('online', running);
         if (txt) txt.textContent = running ? 'Server Running' : 'Server Stopped';
+
+        const netCard = $('#server-network-card');
+        if (running && window.api && window.api.getNetworkInfo) {
+            window.api.getNetworkInfo().then(net => {
+                if (net) {
+                    const valLocal = $('#val-local-ip');
+                    const valLan = $('#val-lan-ip');
+                    if (valLocal) valLocal.textContent = net.sameDeviceJoin || '127.0.0.1:25565';
+                    if (valLan) valLan.textContent = net.lanJoin || net.hotspotJoin || '127.0.0.1:25565';
+                    if (netCard) netCard.classList.remove('hidden');
+                }
+            }).catch(() => {});
+        } else {
+            if (netCard) netCard.classList.add('hidden');
+        }
     });
+
+    // Copy Join IP handlers
+    const btnCopyJoin = $('#btn-copy-join-ip');
+    if (btnCopyJoin) {
+        btnCopyJoin.onclick = () => {
+            const local = $('#val-local-ip') ? $('#val-local-ip').textContent : '127.0.0.1:25565';
+            const lan = $('#val-lan-ip') ? $('#val-lan-ip').textContent : '';
+            const copyText = (lan && lan !== local) ? `${local} (Same Phone) | ${lan} (Wi-Fi/Hotspot)` : local;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(copyText).then(() => toast(`Copied join address: ${copyText}`, 'success')).catch(() => {});
+            } else {
+                toast(`Address: ${copyText}`, 'info');
+            }
+        };
+    }
+    const pillLocal = $('#pill-local-ip');
+    if (pillLocal) {
+        pillLocal.onclick = () => {
+            const val = $('#val-local-ip') ? $('#val-local-ip').textContent : '127.0.0.1:25565';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(val).then(() => toast(`Copied: ${val}`, 'success')).catch(() => {});
+            }
+        };
+    }
+    const pillLan = $('#pill-lan-ip');
+    if (pillLan) {
+        pillLan.onclick = () => {
+            const val = $('#val-lan-ip') ? $('#val-lan-ip').textContent : '127.0.0.1:25565';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(val).then(() => toast(`Copied: ${val}`, 'success')).catch(() => {});
+            }
+        };
+    }
 
     async function startServer() {
         try {
@@ -432,21 +567,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) { toast(e.message, 'error'); }
     };
 
+    let isRestarting = false;
     $('#btn-restart').onclick = async () => {
+        if (isRestarting) return;
+        isRestarting = true;
+        const btnRestart = $('#btn-restart');
+        const btnStart = $('#btn-start');
+        const btnStop = $('#btn-stop');
+
+        btnRestart.disabled = true;
+        btnStart.disabled = true;
+        btnStop.disabled = true;
+
         try {
-            appendConsole('[Jtg-craft] Restarting server...\n');
-            await window.api.serverStop();
-            // Wait for process to end, then restart
-            const waitForStop = setInterval(async () => {
-                const status = await window.api.serverStatus();
-                // serverStatus() returns { running: true/false }
-                const isRunning = (typeof status === 'object' && status !== null) ? !!status.running : !!status;
-                if (!isRunning) {
-                    clearInterval(waitForStop);
-                    setTimeout(startServer, 1000);
+            appendConsole('[Jtg-craft] 🔄 Restarting server safely...\n');
+            toast('Restarting server...', 'info');
+
+            if (window.api && window.api.serverRestart) {
+                await window.api.serverRestart();
+            } else {
+                await window.api.serverStop();
+                let waited = 0;
+                while (waited < 15) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    waited++;
+                    const st = await window.api.serverStatus().catch(() => ({ running: false }));
+                    const isRun = (typeof st === 'object' && st !== null) ? !!st.running : !!st;
+                    if (!isRun) break;
                 }
-            }, 1000);
-        } catch (e) { toast(e.message, 'error'); }
+                await new Promise(r => setTimeout(r, 1500));
+                await startServer();
+            }
+            toast('Server restarted successfully!', 'success');
+        } catch (e) {
+            toast(e.message || 'Restart failed', 'error');
+            appendConsole(`[ERROR] Restart failed: ${e.message}\n`);
+        } finally {
+            isRestarting = false;
+        }
     };
 
     // Send command
@@ -1017,6 +1175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             for (const [key, val] of Object.entries(props)) {
                 const div = document.createElement('div');
                 div.className = 'prop-field';
+                div.dataset.propKey = key.toLowerCase();
 
                 const label = document.createElement('label');
                 label.textContent = key;
@@ -1054,6 +1213,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 form.appendChild(div);
+            }
+
+            // Real-time properties search filter
+            const searchInp = $('#props-search-inp');
+            if (searchInp) {
+                searchInp.value = '';
+                searchInp.oninput = () => {
+                    const q = searchInp.value.trim().toLowerCase();
+                    const fields = form.querySelectorAll('.prop-field');
+                    fields.forEach(f => {
+                        const k = f.dataset.propKey || '';
+                        if (!q || k.includes(q)) {
+                            f.style.display = '';
+                        } else {
+                            f.style.display = 'none';
+                        }
+                    });
+                };
             }
         } catch (e) {
             toast('Failed to load properties', 'error');
@@ -1301,10 +1478,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await window.api.serverDelete();
             toast('Server deleted.');
-            // Reset to welcome
-            showScreen('screen-welcome');
             if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
             $('#sidebar-server-name').textContent = 'Server';
+            const drName = $('#drawer-server-name');
+            if (drName) drName.textContent = 'Server';
+
+            // Cleanly reset create screen so it is never stuck or disabled
+            resetCreateScreen();
+            showScreen('screen-create');
+            checkAndDisplayStorageBanner(savedDir);
         } catch (e) {
             toast(e.message, 'error');
         }
@@ -1739,12 +1921,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await window.api.applyGithubHotUpdate();
                 if (res && res.success) {
-                    statusEl.textContent = `✅ Successfully updated to v${res.version} (Build #${res.versionCode})! Relaunch to apply changes.`;
+                    statusEl.textContent = `✅ Successfully updated to v${res.version} (Build #${res.versionCode})! Save & close app to finish.`;
                     statusEl.style.color = 'var(--green-400)';
                     btnDownloadUpdate.classList.add('hidden');
-                    if (btnRelaunchUpdate) btnRelaunchUpdate.classList.remove('hidden');
+                    if (btnRelaunchUpdate) {
+                        btnRelaunchUpdate.innerHTML = '💾 Save & Close App to Finish Update';
+                        btnRelaunchUpdate.classList.remove('hidden');
+                    }
                     if (progressBox) progressBox.classList.add('hidden');
-                    toast('Update downloaded successfully! Relaunch now to apply changes.', 'success');
+                    toast('Update applied! Click Save & Close, then reopen app.', 'success');
                 }
             } catch (err) {
                 btnDownloadUpdate.disabled = false;
@@ -1758,10 +1943,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // Relaunch app to apply changes
+    // Safely save server and close app to apply changes
     if (btnRelaunchUpdate) {
-        btnRelaunchUpdate.onclick = () => {
-            window.api.relaunchApp();
+        btnRelaunchUpdate.onclick = async () => {
+            btnRelaunchUpdate.disabled = true;
+            btnRelaunchUpdate.innerHTML = '⏳ Saving World & Exiting...';
+            toast('Safely saving world and closing...', 'info');
+
+            // 1. Ensure server is safely stopped and flushed
+            try {
+                if (window.api && window.api.serverStop) {
+                    await window.api.serverStop().catch(() => {});
+                }
+            } catch (_) {}
+
+            // Wait 1.2s for world chunks to flush cleanly
+            await new Promise(r => setTimeout(r, 1200));
+
+            toast('Server saved! Please reopen Jtg-craft from home screen.', 'success');
+
+            // 2. Clean exit (back to launcher/home screen as user requested)
+            setTimeout(() => {
+                if (window.api && window.api.exitApp) {
+                    window.api.exitApp();
+                } else if (window.api && window.api.relaunchApp) {
+                    window.api.relaunchApp();
+                } else {
+                    window.close();
+                }
+            }, 600);
         };
     }
 
@@ -1809,4 +2019,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (_) {}
     }, 2500);
+
+    // Initialize mobile app boot flow (storage, splash, direct-to-create or dashboard)
+    initAppOnStartup();
 });
+

@@ -7,6 +7,16 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.Settings;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -46,6 +56,92 @@ public class FileManagerPlugin extends Plugin {
     public void getServerDir(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("path", getDefaultServerDir().getAbsolutePath());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void checkStoragePermission(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean hasPermission = false;
+        boolean isAllFiles = false;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            isAllFiles = Environment.isExternalStorageManager();
+            hasPermission = isAllFiles;
+        } else {
+            int read = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_EXTERNAL_STORAGE);
+            int write = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            hasPermission = (read == PackageManager.PERMISSION_GRANTED && write == PackageManager.PERMISSION_GRANTED);
+        }
+
+        ret.put("granted", hasPermission);
+        ret.put("isAllFilesAccess", isAllFiles);
+        ret.put("sdkInt", Build.VERSION.SDK_INT);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestStoragePermission(PluginCall call) {
+        Activity act = getActivity();
+        if (act == null) {
+            call.reject("Activity unavailable");
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                act.startActivity(intent);
+                JSObject ret = new JSObject();
+                ret.put("openedSettings", true);
+                call.resolve(ret);
+            } catch (Exception e) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    act.startActivity(intent);
+                    JSObject ret = new JSObject();
+                    ret.put("openedSettings", true);
+                    call.resolve(ret);
+                } catch (Exception e2) {
+                    call.reject("Could not open All Files Access settings: " + e2.getMessage());
+                }
+            }
+        } else {
+            ActivityCompat.requestPermissions(act, new String[]{
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }, 101);
+            JSObject ret = new JSObject();
+            ret.put("requested", true);
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void getDefaultStoragePaths(PluginCall call) {
+        JSObject ret = new JSObject();
+        File extPublic = Environment.getExternalStorageDirectory(); // /storage/emulated/0
+        File jtgDefault = new File(extPublic, "JtgCraft/server");
+        File downloadDefault = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "JtgCraft/server");
+        File appInternal = new File(getContext().getFilesDir(), "servers/default");
+        File appExternal = new File(getContext().getExternalFilesDir(null), "servers/default");
+
+        ret.put("phoneStorage", jtgDefault.getAbsolutePath());
+        ret.put("downloads", downloadDefault.getAbsolutePath());
+        ret.put("appStorage", appInternal.getAbsolutePath());
+        ret.put("appExternal", appExternal != null ? appExternal.getAbsolutePath() : appInternal.getAbsolutePath());
+
+        boolean phoneWritable = false;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                phoneWritable = Environment.isExternalStorageManager();
+            } else {
+                phoneWritable = extPublic.canWrite();
+            }
+        } catch (Throwable ignored) {}
+        ret.put("phoneWritable", phoneWritable);
+
         call.resolve(ret);
     }
 

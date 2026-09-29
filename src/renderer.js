@@ -227,6 +227,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('#create-status').textContent = `Downloading... ${pct}%`;
     });
 
+    function resetCreateScreen() {
+        const btn = $('#btn-create');
+        if (btn) btn.disabled = false;
+        const progressBox = $('#create-progress');
+        if (progressBox) progressBox.classList.add('hidden');
+        const barEl = $('#create-bar');
+        if (barEl) barEl.style.width = '0%';
+        const statusEl = $('#create-status');
+        if (statusEl) statusEl.textContent = '';
+    }
+
     $('#btn-create').onclick = async () => {
         const name = $('#inp-name').value.trim();
 
@@ -262,6 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             toast('Server created successfully!');
             $('#sidebar-server-name').textContent = name;
+            resetCreateScreen();
             initDashboard();
             showScreen('screen-dashboard');
 
@@ -270,7 +282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         } catch (e) {
             toast(e.message || 'Server creation failed', 'error');
-            btn.disabled = false;
+            if (btn) btn.disabled = false;
         }
     };
 
@@ -354,19 +366,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) { toast(e.message, 'error'); }
     };
 
+    let isRestarting = false;
     $('#btn-restart').onclick = async () => {
+        if (isRestarting) return;
+        isRestarting = true;
+        const btnRestart = $('#btn-restart');
+        const btnStart = $('#btn-start');
+        const btnStop = $('#btn-stop');
+
+        btnRestart.disabled = true;
+        btnStart.disabled = true;
+        btnStop.disabled = true;
+
         try {
-            appendConsole('[Jtg-craft] Restarting server...\n');
-            await window.api.serverStop();
-            // Wait for process to end, then restart
-            const waitForStop = setInterval(async () => {
-                const running = await window.api.serverStatus();
-                if (!running) {
-                    clearInterval(waitForStop);
-                    setTimeout(startServer, 1000);
+            appendConsole('[Jtg-craft] 🔄 Restarting server safely...\n');
+            toast('Restarting server...', 'info');
+
+            if (window.api && window.api.serverRestart) {
+                await window.api.serverRestart();
+            } else {
+                await window.api.serverStop();
+                let waited = 0;
+                while (waited < 15) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    waited++;
+                    const running = await window.api.serverStatus().catch(() => false);
+                    if (!running) break;
                 }
-            }, 1000);
-        } catch (e) { toast(e.message, 'error'); }
+                await new Promise(r => setTimeout(r, 1500));
+                await startServer();
+            }
+            toast('Server restarted successfully!', 'success');
+        } catch (e) {
+            toast(e.message || 'Restart failed', 'error');
+            appendConsole(`[ERROR] Restart failed: ${e.message}\n`);
+        } finally {
+            isRestarting = false;
+        }
     };
 
     // Send command
@@ -926,6 +962,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             for (const [key, val] of Object.entries(props)) {
                 const div = document.createElement('div');
                 div.className = 'prop-field';
+                div.dataset.propKey = key.toLowerCase();
 
                 const label = document.createElement('label');
                 label.textContent = key;
@@ -963,6 +1000,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 form.appendChild(div);
+            }
+
+            // Real-time properties search filter
+            const searchInp = $('#props-search-inp');
+            if (searchInp) {
+                searchInp.value = '';
+                searchInp.oninput = () => {
+                    const q = searchInp.value.trim().toLowerCase();
+                    const fields = form.querySelectorAll('.prop-field');
+                    fields.forEach(f => {
+                        const k = f.dataset.propKey || '';
+                        if (!q || k.includes(q)) {
+                            f.style.display = '';
+                        } else {
+                            f.style.display = 'none';
+                        }
+                    });
+                };
             }
         } catch (e) {
             toast('Failed to load properties', 'error');
@@ -1131,10 +1186,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await window.api.serverDelete();
             toast('Server deleted.');
-            // Reset to welcome
-            showScreen('screen-welcome');
             if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
             $('#sidebar-server-name').textContent = 'Server';
+            resetCreateScreen();
+            showScreen('screen-create');
         } catch (e) {
             toast(e.message, 'error');
         }

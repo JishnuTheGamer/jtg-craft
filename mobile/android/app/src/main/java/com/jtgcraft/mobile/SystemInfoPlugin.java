@@ -5,13 +5,20 @@ import android.content.Context;
 import android.os.Build;
 import android.os.Environment;
 import android.os.StatFs;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.io.FileInputStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
+import java.util.Enumeration;
+import java.util.Properties;
 
 @CapacitorPlugin(name = "SystemInfo")
 public class SystemInfoPlugin extends Plugin {
@@ -117,5 +124,66 @@ public class SystemInfoPlugin extends Plugin {
             }
         }
         call.resolve(res);
+    }
+
+    @PluginMethod
+    public void getNetworkInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        String wifiIp = "";
+        String hotspotIp = "";
+        String otherIp = "";
+        JSArray ipList = new JSArray();
+
+        try {
+            Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces();
+            while (en != null && en.hasMoreElements()) {
+                NetworkInterface ni = en.nextElement();
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String ifName = ni.getName().toLowerCase();
+                Enumeration<InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress addr = addrs.nextElement();
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                        String ip = addr.getHostAddress();
+                        if (ip != null && !ip.isEmpty()) {
+                            ipList.put(ip);
+                            if (ifName.contains("wlan") || ifName.contains("eth")) {
+                                wifiIp = ip;
+                            } else if (ifName.contains("ap") || ifName.contains("hotspot") || ip.startsWith("192.168.43.")) {
+                                hotspotIp = ip;
+                            } else if (otherIp.isEmpty()) {
+                                otherIp = ip;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        String bestLanIp = !wifiIp.isEmpty() ? wifiIp : (!hotspotIp.isEmpty() ? hotspotIp : otherIp);
+        if (bestLanIp.isEmpty()) bestLanIp = "127.0.0.1";
+
+        int port = 25565;
+        try {
+            File sdir = ServerProcessPlugin.getActiveServerDir(getContext());
+            File pf = new File(sdir, "server.properties");
+            if (pf.exists()) {
+                Properties props = new Properties();
+                try (FileInputStream fis = new FileInputStream(pf)) {
+                    props.load(fis);
+                    port = Integer.parseInt(props.getProperty("server-port", "25565"));
+                }
+            }
+        } catch (Exception ignored) {}
+
+        ret.put("localIp", "127.0.0.1");
+        ret.put("lanIp", bestLanIp);
+        ret.put("port", port);
+        ret.put("sameDeviceJoin", "127.0.0.1:" + port);
+        ret.put("lanJoin", bestLanIp + ":" + port);
+        ret.put("hotspotJoin", (!hotspotIp.isEmpty() ? hotspotIp : "192.168.43.1") + ":" + port);
+        ret.put("allIps", ipList);
+
+        call.resolve(ret);
     }
 }

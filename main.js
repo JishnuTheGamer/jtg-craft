@@ -1285,6 +1285,73 @@ ipcMain.handle('server-stop', () => {
     }
 });
 
+ipcMain.handle('server-restart', async () => {
+    if (serverProcess) {
+        try { serverProcess.stdin.write('save-all\n'); } catch (_) {}
+        await new Promise(r => setTimeout(r, 600));
+        try { serverProcess.stdin.write('stop\n'); } catch (_) {}
+        let waited = 0;
+        while (serverProcess && waited < 12) {
+            await new Promise(r => setTimeout(r, 500));
+            waited++;
+        }
+        if (serverProcess) {
+            try {
+                if (serverProcess.pid) exec(`taskkill /F /T /PID ${serverProcess.pid}`, () => {});
+                else serverProcess.kill();
+            } catch (_) {}
+            serverProcess = null;
+            serverRunning = false;
+        }
+    }
+    if (currentServerDir) {
+        const propsPath = path.join(currentServerDir, 'server.properties');
+        let propsContent = await fs.readFile(propsPath, 'utf-8').catch(() => '');
+        const portMatch = propsContent.match(/(?:^|[\r\n])\s*server-port\s*=\s*(\d+)/);
+        let port = portMatch ? parseInt(portMatch[1], 10) : 25565;
+        for (let i = 0; i < 10; i++) {
+            const inUse = await checkPortInUse(port);
+            if (!inUse) break;
+            await new Promise(r => setTimeout(r, 400));
+        }
+    }
+    await new Promise(r => setTimeout(r, 500));
+    // Trigger server-start logic
+    const startHandler = ipcMain._invokeHandlers ? ipcMain._invokeHandlers.get('server-start') : null;
+    if (startHandler) return await startHandler(null);
+    return { success: true };
+});
+
+ipcMain.handle('get-network-info', async () => {
+    const interfaces = os.networkInterfaces();
+    let bestLan = '127.0.0.1';
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                bestLan = iface.address;
+                break;
+            }
+        }
+    }
+    let port = 25565;
+    if (currentServerDir) {
+        try {
+            const propsPath = path.join(currentServerDir, 'server.properties');
+            const propsContent = await fs.readFile(propsPath, 'utf-8');
+            const match = propsContent.match(/(?:^|[\r\n])\s*server-port\s*=\s*(\d+)/);
+            if (match) port = parseInt(match[1], 10);
+        } catch (_) {}
+    }
+    return {
+        localIp: '127.0.0.1',
+        lanIp: bestLan,
+        port: port,
+        sameDeviceJoin: `127.0.0.1:${port}`,
+        lanJoin: `${bestLan}:${port}`,
+        hotspotJoin: `${bestLan}:${port}`
+    };
+});
+
 ipcMain.handle('server-kill', () => {
     if (!serverProcess) return;
     try {
