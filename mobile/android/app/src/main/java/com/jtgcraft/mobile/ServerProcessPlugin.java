@@ -536,6 +536,7 @@ public class ServerProcessPlugin extends Plugin {
                 "-Djava.home=" + javaHome.getAbsolutePath(),
                 "-Duser.home=" + sdir.getAbsolutePath(),
                 "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(),
+                "-Dspark.useOsTmpDir=true",
                 "-Djna.boot.library.path=" + jnaSearchPath,
                 "-Djna.library.path=" + jnaSearchPath,
                 "-Djna.tmpdir=" + tmpDir.getAbsolutePath(),
@@ -627,15 +628,21 @@ public class ServerProcessPlugin extends Plugin {
         String line;
         boolean skippingOshiTrace = false;
         while ((line = reader.readLine()) != null) {
-            // Filter cosmetic OSHI diagnostic warnings on Android ARM64 where /proc/stat is unreadable
+            // Filter cosmetic Android linker, OSHI diagnostic, and spark profiler fallback warnings
             if (line.contains("Failed to get system info for Microarchitecture") ||
                 line.contains("Did not find udev library") ||
-                line.contains("File not found or not readable: /proc/stat")) {
+                line.contains("File not found or not readable: /proc/stat") ||
+                line.contains("WARNING: linker:") ||
+                line.contains("is not accessible for the namespace") ||
+                line.contains("Unable to initialise the async-profiler engine") ||
+                line.contains("Using-async-profiler")) {
                 skippingOshiTrace = true;
                 continue;
             }
             if (skippingOshiTrace) {
-                if (line.trim().startsWith("at ") || line.contains("oshi.") || line.contains("SystemReport") || line.contains("NullPointerException")) {
+                if (line.trim().startsWith("at ") || line.contains("oshi.") || line.contains("SystemReport") ||
+                    line.contains("NullPointerException") || line.contains("spark") || line.contains("linker") ||
+                    line.contains("permitted_paths")) {
                     continue;
                 } else {
                     skippingOshiTrace = false;
