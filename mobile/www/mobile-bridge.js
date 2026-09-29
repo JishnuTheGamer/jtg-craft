@@ -25,6 +25,9 @@
     const CapApp        = (Cap.Plugins && Cap.Plugins.App) ? Cap.Plugins.App : {};
 
     // ── Mobile Update Config (GitHub Data Center) ───────────────
+    const BUNDLED_APP_VERSION = '1.0.6';
+    const BUNDLED_APP_VERSION_CODE = 1006;
+
     const MOBILE_GITHUB_CONFIG = {
         owner: 'JishnuTheGamer',
         repo: 'jtg-craft',
@@ -1192,8 +1195,8 @@
                 const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
                 const remote = await resp.json();
                 const local = await window.api.getAppVersion();
-                const localCode = parseInt(localStorage.getItem('installed_ota_version_code') || '1000', 10);
-                const remoteCode = parseInt(remote.versionCode || '1000', 10);
+                const localCode = parseInt(localStorage.getItem('installed_ota_version_code') || String(BUNDLED_APP_VERSION_CODE), 10);
+                const remoteCode = parseInt(remote.versionCode || String(BUNDLED_APP_VERSION_CODE), 10);
                 const hasUpdate = (remoteCode > localCode) || isNewerVersion(remote.version, local);
                 return {
                     updateAvailable: hasUpdate,
@@ -1213,26 +1216,39 @@
         getUpdateChangelog: async () => {
             try {
                 const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
-                const data = await resp.json();
-                return data.changelog || [];
-            } catch (e) {
-                return [];
-            }
+                if (resp.ok) {
+                    const data = await resp.json();
+                    return data;
+                }
+            } catch (_) {}
+            try {
+                const localResp = await fetch('mobile-update-check.json');
+                if (localResp.ok) {
+                    return await localResp.json();
+                }
+            } catch (_) {}
+            return {
+                version: BUNDLED_APP_VERSION,
+                versionCode: BUNDLED_APP_VERSION_CODE,
+                changelog: []
+            };
         },
         getAppVersion: async () => {
             try {
-                let nativeVer = '1.0.0';
+                let baseVer = BUNDLED_APP_VERSION;
                 if (CapApp.getInfo) {
                     const info = await CapApp.getInfo();
-                    if (info && info.version) nativeVer = info.version;
+                    if (info && info.version && isNewerVersion(info.version, baseVer)) {
+                        baseVer = info.version;
+                    }
                 }
                 const otaVer = localStorage.getItem('installed_ota_version');
-                if (otaVer && isNewerVersion(otaVer, nativeVer)) {
+                if (otaVer && isNewerVersion(otaVer, baseVer)) {
                     return otaVer;
                 }
-                return nativeVer;
+                return baseVer;
             } catch (e) {
-                return '1.0.0';
+                return BUNDLED_APP_VERSION;
             }
         },
         applyGithubHotUpdate: async () => {

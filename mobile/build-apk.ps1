@@ -82,7 +82,16 @@ Write-Host "Android SDK Platform 34 Installed" -ForegroundColor Green
 
 # ── 4. Sync Web Assets to Android Project ───────────────────
 Write-Host "`n[4/5] Syncing latest web assets to Android..." -ForegroundColor Yellow
+$srcDir = Join-Path $ScriptDir "src"
 $webAssets = Join-Path $ScriptDir "www"
+if (Test-Path $srcDir) {
+    Copy-Item -Path (Join-Path $srcDir "mobile-bridge.js") -Destination (Join-Path $webAssets "mobile-bridge.js") -Force -ErrorAction SilentlyContinue
+    Copy-Item -Path (Join-Path $srcDir "mobile-patches.css") -Destination (Join-Path $webAssets "mobile-patches.css") -Force -ErrorAction SilentlyContinue
+}
+$updateManifest = Join-Path $ScriptDir "mobile-update-check.json"
+if (Test-Path $updateManifest) {
+    Copy-Item -Path $updateManifest -Destination (Join-Path $webAssets "mobile-update-check.json") -Force
+}
 $androidPublicAssets = Join-Path $ScriptDir "android\app\src\main\assets\public"
 if (Test-Path $webAssets) {
     Copy-Item -Path "$webAssets\*" -Destination $androidPublicAssets -Recurse -Force
