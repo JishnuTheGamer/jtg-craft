@@ -1501,6 +1501,24 @@ const initApp = async () => {
         };
     }
 
+    const btnBatteryOpt = $('#btn-battery-opt');
+    if (btnBatteryOpt) {
+        btnBatteryOpt.onclick = async () => {
+            try {
+                if (window.api && window.api.requestBatteryOptimization) {
+                    const res = await window.api.requestBatteryOptimization();
+                    if (res && res.isIgnoring) {
+                        toast('Unrestricted background running is already active!', 'success');
+                    } else {
+                        toast('Prompted for Unrestricted Battery permission.', 'info');
+                    }
+                }
+            } catch (e) {
+                toast(e.message || 'Could not open battery settings', 'error');
+            }
+        };
+    }
+
     $('#btn-settings-delete').onclick = async () => {
         if (!confirm('Are you absolutely sure you want to DELETE this server and all its files? This CANNOT be undone!')) return;
         try {

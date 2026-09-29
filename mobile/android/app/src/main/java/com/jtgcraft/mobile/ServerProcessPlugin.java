@@ -2,7 +2,10 @@ package com.jtgcraft.mobile;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Environment;
+import android.os.PowerManager;
+import android.provider.Settings;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -613,6 +616,9 @@ public class ServerProcessPlugin extends Plugin {
                 "-Djava.library.path=" + jnaSearchPath + ":" + jreServer.getAbsolutePath() + ":/system/lib64:/vendor/lib64",
                 "-Djava.net.preferIPv4Stack=false",
                 "-Djava.net.preferIPv4Addresses=true",
+                "-Dio.netty.leakDetection.level=DISABLED",
+                "-Dsun.net.inetaddr.ttl=30",
+                "-Dsun.net.inetaddr.negative.ttl=10",
                 "-Dpaper.disable-watchdog=true",
                 "-Dspigot.watchdog.disabled=true",
                 "-Dmax.tick.time=-1",
@@ -1472,6 +1478,34 @@ public class ServerProcessPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    @PluginMethod
+    public void requestBatteryOptimizationExemption(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            Context ctx = getContext();
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+                String pkgName = ctx.getPackageName();
+                boolean isIgnoring = pm != null && pm.isIgnoringBatteryOptimizations(pkgName);
+                ret.put("isIgnoring", isIgnoring);
+                if (!isIgnoring) {
+                    Intent intent = new Intent();
+                    intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    intent.setData(Uri.parse("package:" + pkgName));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(intent);
+                }
+            } else {
+                ret.put("isIgnoring", true);
+            }
+            call.resolve(ret);
+        } catch (Throwable t) {
+            ret.put("error", t.getMessage());
+            ret.put("isIgnoring", false);
+            call.resolve(ret);
+        }
+    }
+
     private void ensureServerOptimizations(File sdir) {
         if (sdir == null) return;
         try {
@@ -1486,6 +1520,7 @@ public class ServerProcessPlugin extends Plugin {
             props.setProperty("server-port", props.getProperty("server-port", "25565"));
             props.setProperty("server-ip", "");
             props.setProperty("online-mode", props.getProperty("online-mode", "false"));
+            props.setProperty("prevent-proxy-connections", "false");
             props.setProperty("max-tick-time", "-1");
             props.setProperty("sync-chunk-writes", "false");
             props.setProperty("view-distance", props.getProperty("view-distance", "6"));

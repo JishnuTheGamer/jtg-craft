@@ -16,6 +16,8 @@ public class ServerForegroundService extends Service {
     private static final String CHANNEL_ID = "jtg_server_channel";
     private static final int NOTIFICATION_ID = 1001;
     private PowerManager.WakeLock wakeLock;
+    private android.net.wifi.WifiManager.WifiLock wifiLock;
+    private android.net.wifi.WifiManager.MulticastLock multicastLock;
 
     @Override
     public void onCreate() {
@@ -57,12 +59,34 @@ public class ServerForegroundService extends Service {
             } catch (Throwable ignored) {}
         }
 
-        // Keep CPU awake while Minecraft server is running
+        // 1. Keep CPU awake while Minecraft server is running
         try {
             PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (powerManager != null && (wakeLock == null || !wakeLock.isHeld())) {
                 wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "JtgCraft:ServerWakeLock");
+                wakeLock.setReferenceCounted(false);
                 wakeLock.acquire();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // 2. Prevent Wi-Fi Power Save / High Latency mode when screen is off
+        try {
+            android.net.wifi.WifiManager wifiManager = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null && (wifiLock == null || !wifiLock.isHeld())) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    wifiLock = wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "JtgCraft:ServerWifiLock");
+                } else {
+                    wifiLock = wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "JtgCraft:ServerWifiLock");
+                }
+                wifiLock.setReferenceCounted(false);
+                wifiLock.acquire();
+            }
+            if (wifiManager != null && (multicastLock == null || !multicastLock.isHeld())) {
+                multicastLock = wifiManager.createMulticastLock("JtgCraft:ServerMulticastLock");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -100,12 +124,20 @@ public class ServerForegroundService extends Service {
 
     @Override
     public void onDestroy() {
+        if (multicastLock != null && multicastLock.isHeld()) {
+            try {
+                multicastLock.release();
+            } catch (Exception ignored) {}
+        }
+        if (wifiLock != null && wifiLock.isHeld()) {
+            try {
+                wifiLock.release();
+            } catch (Exception ignored) {}
+        }
         if (wakeLock != null && wakeLock.isHeld()) {
             try {
                 wakeLock.release();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception ignored) {}
         }
         stopForeground(true);
         super.onDestroy();

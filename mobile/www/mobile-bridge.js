@@ -720,7 +720,18 @@
             if (ServerProcess.createServer) return ServerProcess.createServer(opts);
             return Promise.resolve({ success: true });
         },
-        serverStart: () => {
+        requestBatteryOptimization: () => {
+            if (ServerProcess && ServerProcess.requestBatteryOptimizationExemption) {
+                return ServerProcess.requestBatteryOptimizationExemption();
+            }
+            return Promise.resolve({ isIgnoring: true });
+        },
+        serverStart: async () => {
+            try {
+                if (ServerProcess && ServerProcess.requestBatteryOptimizationExemption) {
+                    await ServerProcess.requestBatteryOptimizationExemption().catch(() => {});
+                }
+            } catch (_) {}
             if (ServerProcess.start) return ServerProcess.start();
             return Promise.resolve({ success: true });
         },
