@@ -1921,15 +1921,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await window.api.applyGithubHotUpdate();
                 if (res && res.success) {
-                    statusEl.textContent = `✅ Successfully updated to v${res.version} (Build #${res.versionCode})! Save & close app to finish.`;
+                    statusEl.textContent = `✅ Successfully updated to v${res.version} (Build #${res.versionCode})! Relaunch now to apply changes.`;
                     statusEl.style.color = 'var(--green-400)';
                     btnDownloadUpdate.classList.add('hidden');
                     if (btnRelaunchUpdate) {
-                        btnRelaunchUpdate.innerHTML = '💾 Save & Close App to Finish Update';
+                        btnRelaunchUpdate.innerHTML = '🔄 Relaunch to Apply Update';
                         btnRelaunchUpdate.classList.remove('hidden');
                     }
                     if (progressBox) progressBox.classList.add('hidden');
-                    toast('Update applied! Click Save & Close, then reopen app.', 'success');
+                    toast('Update applied successfully! Relaunching will activate new features.', 'success');
                 }
             } catch (err) {
                 btnDownloadUpdate.disabled = false;
@@ -1943,35 +1943,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // Safely save server and close app to apply changes
+    // Safely save server and relaunch app to apply changes (PC parity)
     if (btnRelaunchUpdate) {
         btnRelaunchUpdate.onclick = async () => {
             btnRelaunchUpdate.disabled = true;
-            btnRelaunchUpdate.innerHTML = '⏳ Saving World & Exiting...';
-            toast('Safely saving world and closing...', 'info');
+            btnRelaunchUpdate.innerHTML = '⏳ Saving World & Relaunching...';
+            toast('Safely saving world & relaunching Jtg-Craft...', 'info');
 
-            // 1. Ensure server is safely stopped and flushed
             try {
-                if (window.api && window.api.serverStop) {
-                    await window.api.serverStop().catch(() => {});
-                }
-            } catch (_) {}
-
-            // Wait 1.2s for world chunks to flush cleanly
-            await new Promise(r => setTimeout(r, 1200));
-
-            toast('Server saved! Please reopen Jtg-craft from home screen.', 'success');
-
-            // 2. Clean exit (back to launcher/home screen as user requested)
-            setTimeout(() => {
-                if (window.api && window.api.exitApp) {
-                    window.api.exitApp();
-                } else if (window.api && window.api.relaunchApp) {
-                    window.api.relaunchApp();
+                if (window.api && window.api.relaunchApp) {
+                    await window.api.relaunchApp();
                 } else {
-                    window.close();
+                    window.location.reload();
                 }
-            }, 600);
+            } catch (_) {
+                window.location.reload();
+            }
         };
     }
 

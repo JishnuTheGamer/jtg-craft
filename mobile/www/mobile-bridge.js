@@ -1131,12 +1131,16 @@
                 const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
                 const remote = await resp.json();
                 const local = await window.api.getAppVersion();
-                const hasUpdate = isNewerVersion(remote.version, local);
+                const localCode = parseInt(localStorage.getItem('installed_ota_version_code') || '1000', 10);
+                const remoteCode = parseInt(remote.versionCode || '1000', 10);
+                const hasUpdate = (remoteCode > localCode) || isNewerVersion(remote.version, local);
                 return {
                     updateAvailable: hasUpdate,
                     available: hasUpdate,
                     version: remote.version,
-                    versionCode: remote.versionCode || 1000,
+                    versionCode: remoteCode,
+                    currentVersion: local,
+                    currentVersionCode: localCode,
                     downloadUrl: MOBILE_GITHUB_CONFIG.releasesUrl,
                     changelog: remote.changelog,
                     files: remote.files || []
@@ -1196,6 +1200,9 @@
                 if (manifest.version) {
                     localStorage.setItem('installed_ota_version', manifest.version);
                 }
+                if (manifest.versionCode) {
+                    localStorage.setItem('installed_ota_version_code', String(manifest.versionCode));
+                }
 
                 return { success: true, updatedFiles: updated, version: manifest.version || '1.0', versionCode: manifest.versionCode || 1 };
             } catch (e) {
@@ -1222,6 +1229,12 @@
             try { window.close(); } catch (_) {}
         },
         relaunchApp: async () => {
+            try {
+                if (ServerProcess && ServerProcess.relaunchApp) {
+                    await ServerProcess.relaunchApp();
+                    return;
+                }
+            } catch (_) {}
             try {
                 if (ServerProcess && ServerProcess.stop) {
                     await ServerProcess.stop().catch(() => {});
@@ -1266,4 +1279,27 @@
     };
 
     console.log('[Jtg-craft Mobile] Bridge initialized successfully with full Electron API parity.');
+
+    // ── Automatic Background Update Detection (Parity with PC) ──
+    setTimeout(async () => {
+        try {
+            if (window.api && window.api.checkForUpdatesManual) {
+                const res = await window.api.checkForUpdatesManual();
+                if (res && res.updateAvailable) {
+                    emitEvent('hot-update-available', res);
+                }
+            }
+        } catch (_) {}
+    }, 3500);
+
+    setInterval(async () => {
+        try {
+            if (window.api && window.api.checkForUpdatesManual) {
+                const res = await window.api.checkForUpdatesManual();
+                if (res && res.updateAvailable) {
+                    emitEvent('hot-update-available', res);
+                }
+            }
+        } catch (_) {}
+    }, 30 * 60 * 1000);
 })();

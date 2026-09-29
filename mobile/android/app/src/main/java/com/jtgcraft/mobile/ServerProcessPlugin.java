@@ -820,6 +820,26 @@ public class ServerProcessPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void relaunchApp(PluginCall call) {
+        new Thread(() -> {
+            stopServerSafely();
+            android.content.Context ctx = getContext();
+            if (ctx != null) {
+                android.content.Intent intent = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+                if (intent != null) {
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    ctx.startActivity(intent);
+                    if (call != null) call.resolve();
+                    try { Thread.sleep(400); } catch (Exception ignored) {}
+                    Runtime.getRuntime().exit(0);
+                    return;
+                }
+            }
+            if (call != null) call.resolve();
+        }).start();
+    }
+
+    @PluginMethod
     public void kill(PluginCall call) {
         if (serverProcess != null) {
             try {
