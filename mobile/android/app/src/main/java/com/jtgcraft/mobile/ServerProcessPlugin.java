@@ -609,6 +609,7 @@ public class ServerProcessPlugin extends Plugin {
                 "-Xmx" + ram + "M",
                 "-XX:+UnlockExperimentalVMOptions",
                 "-XX:+UseG1GC",
+                "-noverify",
                 "-Djava.home=" + javaHome.getAbsolutePath(),
                 "-Duser.home=" + sdir.getAbsolutePath(),
                 "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(),
@@ -1617,8 +1618,10 @@ public class ServerProcessPlugin extends Plugin {
         File tempFile = new File(jarFile.getParentFile(), jarFile.getName() + ".tmp." + System.currentTimeMillis());
         boolean patched = false;
 
+        // Original disable_ip6() bytecode: aload_0, getfield #xx, ireturn
+        // We search for the 5-byte pattern and replace it so that the method
+        // returns true (iconst_1; ireturn).
         byte[] targetBytes = new byte[]{(byte)0x2a, (byte)0xb4, (byte)0x00, (byte)0x14, (byte)0xac};
-        byte[] replacementBytes = new byte[]{(byte)0x04, (byte)0xac, (byte)0x00, (byte)0x00, (byte)0x00};
 
         try (ZipFile zipIn = new ZipFile(jarFile);
              ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)))) {
@@ -1642,15 +1645,65 @@ public class ServerProcessPlugin extends Plugin {
                     byte[] data = baos.toByteArray();
 
                     if ("gg/playit/api/model/response/AgentRouting.class".equals(name)) {
+                        // Search for the target bytecode pattern
                         for (int i = 0; i <= data.length - targetBytes.length; i++) {
                             boolean match = true;
                             for (int j = 0; j < targetBytes.length; j++) {
                                 if (data[i + j] != targetBytes[j]) { match = false; break; }
                             }
                             if (match) {
-                                for (int j = 0; j < replacementBytes.length; j++) {
-                                    data[i + j] = replacementBytes[j];
+                                // Replace first 2 bytes: iconst_1 (0x04), ireturn (0xac)
+                                data[i] = (byte)0x04;
+                                data[i + 1] = (byte)0xac;
+
+                                // Now fix the Code attribute's code_length from 5 to 2.
+                                // The code_length (u4) is stored 8 bytes before the code starts.
+                                // Code attribute layout: attr_name_idx(u2) + attr_length(u4) + max_stack(u2) + max_locals(u2) + code_length(u4) + code[...]
+                                // So code_length starts at (code_start - 4).
+                                // We scan backwards from offset i to find the code_length field.
+                                // Since our code starts at offset i and code_length = 5 (0x00000005),
+                                // the 4-byte big-endian code_length should be at (i - 4).
+                                int codeLenOffset = i - 4;
+                                if (codeLenOffset >= 0
+                                        && data[codeLenOffset] == 0x00
+                                        && data[codeLenOffset + 1] == 0x00
+                                        && data[codeLenOffset + 2] == 0x00
+                                        && data[codeLenOffset + 3] == 0x05) {
+                                    // Shrink code_length from 5 to 2
+                                    data[codeLenOffset + 3] = 0x02;
+
+                                    // Also update the overall attribute_length (u4 at codeLenOffset - 6):
+                                    // attribute_length = 2(max_stack) + 2(max_locals) + 4(code_length) + code_length + 2(exception_table_length) + exception_table + 2(attributes_count) + attributes
+                                    // Reducing code_length by 3 means attribute_length should also decrease by 3.
+                                    int attrLenOffset = codeLenOffset - 6;
+                                    if (attrLenOffset >= 0) {
+                                        long attrLen = ((data[attrLenOffset] & 0xFFL) << 24)
+                                                     | ((data[attrLenOffset + 1] & 0xFFL) << 16)
+                                                     | ((data[attrLenOffset + 2] & 0xFFL) << 8)
+                                                     | (data[attrLenOffset + 3] & 0xFFL);
+                                        attrLen -= 3;
+                                        data[attrLenOffset]     = (byte)((attrLen >> 24) & 0xFF);
+                                        data[attrLenOffset + 1] = (byte)((attrLen >> 16) & 0xFF);
+                                        data[attrLenOffset + 2] = (byte)((attrLen >> 8) & 0xFF);
+                                        data[attrLenOffset + 3] = (byte)(attrLen & 0xFF);
+                                    }
+
+                                    // Remove the 3 trailing dead bytes from the code array
+                                    // by creating a new byte array without them
+                                    int removeStart = i + 2; // start of dead nop bytes
+                                    int removeCount = 3;
+                                    byte[] newData = new byte[data.length - removeCount];
+                                    System.arraycopy(data, 0, newData, 0, removeStart);
+                                    System.arraycopy(data, removeStart + removeCount, newData, removeStart, data.length - removeStart - removeCount);
+                                    data = newData;
+                                } else {
+                                    // Fallback: just write iconst_1; ireturn; nop nop nop
+                                    // The -noverify JVM flag will handle this
+                                    data[i + 2] = 0x00;
+                                    data[i + 3] = 0x00;
+                                    data[i + 4] = 0x00;
                                 }
+
                                 patched = true;
                                 break;
                             }
