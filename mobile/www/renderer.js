@@ -87,14 +87,16 @@ const initApp = async () => {
     if ($('#tb-close')) $('#tb-close').onclick = () => window.api && window.api.winClose && window.api.winClose();
 
     // ── System info for sliders (Defensive with fallback) ────
+    let sldRam = null;
+    let sldCpu = null;
     try {
         const sysInfo = (window.api && window.api.getSystemInfo) ? await window.api.getSystemInfo() : { totalRamMB: 4096, cores: 4 };
         const totalRam = (sysInfo && sysInfo.totalRamMB) ? sysInfo.totalRamMB : 4096;
         const ramMax = Math.max(2048, totalRam - 2048); // leave 2GB for OS
         const cpuMax = (sysInfo && sysInfo.cores) ? sysInfo.cores : 4;
 
-        const sldRam = $('#sld-ram');
-        const sldCpu = $('#sld-cpu');
+        sldRam = $('#sld-ram');
+        sldCpu = $('#sld-cpu');
         if (sldRam) {
             sldRam.max = ramMax;
             sldRam.value = Math.min(2048, ramMax);
@@ -397,11 +399,16 @@ const initApp = async () => {
             if (statusEl) statusEl.textContent = `Downloading Paper ${version}...`;
             if (barEl) barEl.style.width = '30%';
 
+            const ramInput = $('#sld-ram');
+            const cpuInput = $('#sld-cpu');
+            const ramVal = (ramInput && ramInput.value) ? parseInt(ramInput.value, 10) : (sldRam && sldRam.value ? parseInt(sldRam.value, 10) : 2048);
+            const cpuVal = (cpuInput && cpuInput.value) ? parseInt(cpuInput.value, 10) : (sldCpu && sldCpu.value ? parseInt(sldCpu.value, 10) : 2);
+
             await window.api.createServer({
                 dir: savedDir,
                 name: name,
-                ram: parseInt(sldRam.value),
-                cpu: parseInt(sldCpu.value),
+                ram: ramVal,
+                cpu: cpuVal,
                 version: version
             });
 
