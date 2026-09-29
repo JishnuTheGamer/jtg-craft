@@ -16,6 +16,7 @@ import java.io.*;
 import java.net.*;
 import java.util.Enumeration;
 import java.util.Properties;
+import java.util.zip.*;
 
 @CapacitorPlugin(name = "ServerProcess")
 public class ServerProcessPlugin extends Plugin {
@@ -557,6 +558,9 @@ public class ServerProcessPlugin extends Plugin {
         // Ensure server performance optimizations and network IP binding
         ensureServerOptimizations(sdir);
 
+        // Ensure Playit tunnel IPv4 compatibility
+        ensurePlayitCompatibility(sdir);
+
         // Read RAM from metadata if available
         int allocatedRam = 1024;
         File meta = new File(sdir, ".mcmeta.json");
@@ -614,6 +618,7 @@ public class ServerProcessPlugin extends Plugin {
                 "-Djna.tmpdir=" + tmpDir.getAbsolutePath(),
                 "-Djna.nosys=false",
                 "-Djava.library.path=" + jnaSearchPath + ":" + jreServer.getAbsolutePath() + ":/system/lib64:/vendor/lib64",
+                "-Djdk.net.usePlainDatagramSocketImpl=true",
                 "-Djava.net.preferIPv4Stack=false",
                 "-Djava.net.preferIPv4Addresses=true",
                 "-Dio.netty.leakDetection.level=DISABLED",
@@ -1582,5 +1587,107 @@ public class ServerProcessPlugin extends Plugin {
                 }
             }
         } catch (Throwable ignored) {}
+    }
+
+    public void ensurePlayitCompatibility(File sdir) {
+        if (sdir == null) return;
+        File pluginsDir = new File(sdir, "plugins");
+        if (!pluginsDir.exists() || !pluginsDir.isDirectory()) return;
+
+        File[] files = pluginsDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
+        if (files == null) return;
+
+        for (File jarFile : files) {
+            try {
+                if (jarFile.getName().toLowerCase().contains("playit")) {
+                    boolean patched = patchPlayitJarIfNeeded(jarFile);
+                    if (patched) {
+                        JSObject pMsg = new JSObject();
+                        pMsg.put("text", "[Jtg-craft] 🛡️ Applied Playit tunnel IPv4 compatibility patch.\n");
+                        notifyListeners("console-data", pMsg);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    public static boolean patchPlayitJarIfNeeded(File jarFile) {
+        if (jarFile == null || !jarFile.exists() || !jarFile.canRead()) return false;
+
+        File tempFile = new File(jarFile.getParentFile(), jarFile.getName() + ".tmp." + System.currentTimeMillis());
+        boolean patched = false;
+
+        byte[] targetBytes = new byte[]{(byte)0x2a, (byte)0xb4, (byte)0x00, (byte)0x14, (byte)0xac};
+        byte[] replacementBytes = new byte[]{(byte)0x04, (byte)0xac, (byte)0x00, (byte)0x00, (byte)0x00};
+
+        try (ZipFile zipIn = new ZipFile(jarFile);
+             ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)))) {
+
+            ZipEntry routingEntry = zipIn.getEntry("gg/playit/api/model/response/AgentRouting.class");
+            if (routingEntry == null) {
+                tempFile.delete();
+                return false;
+            }
+
+            Enumeration<? extends ZipEntry> entries = zipIn.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = entry.getName();
+
+                try (InputStream is = zipIn.getInputStream(entry)) {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[8192];
+                    int r;
+                    while ((r = is.read(buffer)) != -1) baos.write(buffer, 0, r);
+                    byte[] data = baos.toByteArray();
+
+                    if ("gg/playit/api/model/response/AgentRouting.class".equals(name)) {
+                        for (int i = 0; i <= data.length - targetBytes.length; i++) {
+                            boolean match = true;
+                            for (int j = 0; j < targetBytes.length; j++) {
+                                if (data[i + j] != targetBytes[j]) { match = false; break; }
+                            }
+                            if (match) {
+                                for (int j = 0; j < replacementBytes.length; j++) {
+                                    data[i + j] = replacementBytes[j];
+                                }
+                                patched = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    ZipEntry newEntry = new ZipEntry(name);
+                    newEntry.setTime(entry.getTime());
+                    zos.putNextEntry(newEntry);
+                    zos.write(data);
+                    zos.closeEntry();
+                }
+            }
+        } catch (Exception e) {
+            tempFile.delete();
+            return false;
+        }
+
+        if (patched) {
+            File backup = new File(jarFile.getParentFile(), jarFile.getName() + ".bak");
+            if (backup.exists()) backup.delete();
+            if (jarFile.renameTo(backup)) {
+                if (tempFile.renameTo(jarFile)) {
+                    backup.delete();
+                    return true;
+                } else {
+                    backup.renameTo(jarFile);
+                    tempFile.delete();
+                    return false;
+                }
+            } else {
+                tempFile.delete();
+                return false;
+            }
+        } else {
+            tempFile.delete();
+            return false;
+        }
     }
 }

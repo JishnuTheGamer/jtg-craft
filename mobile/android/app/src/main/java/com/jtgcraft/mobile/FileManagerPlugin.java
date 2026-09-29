@@ -593,6 +593,10 @@ public class FileManagerPlugin extends Plugin {
                     tmpJar.delete();
                 }
 
+                try {
+                    ServerProcessPlugin.patchPlayitJarIfNeeded(targetJar);
+                } catch (Throwable ignored) {}
+
                 JSObject finalProg = new JSObject();
                 finalProg.put("fileName", fileName);
                 finalProg.put("downloaded", targetJar.length());
