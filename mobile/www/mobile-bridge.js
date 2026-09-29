@@ -333,6 +333,18 @@
             downloads: 3700000,
             categories: ["utility", "economy"],
             defaultFileName: "DeluxeMenus.jar"
+        },
+        {
+            id: "playit",
+            slug: "playit",
+            title: "Playit.gg",
+            author: "playit-cloud",
+            description: "Free tunnel to share your server with friends without port forwarding. Gives you a public IP/domain.",
+            icon_url: "https://playit.gg/favicon.png",
+            downloads: 5000000,
+            categories: ["utility", "network"],
+            directDownload: "https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.2.0/playit-minecraft-plugin.jar",
+            defaultFileName: "playit-minecraft-plugin.jar"
         }
     ];
 

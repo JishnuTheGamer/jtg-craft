@@ -611,7 +611,7 @@ public class ServerProcessPlugin extends Plugin {
                 "-Djna.tmpdir=" + tmpDir.getAbsolutePath(),
                 "-Djna.nosys=false",
                 "-Djava.library.path=" + jnaSearchPath + ":" + jreServer.getAbsolutePath() + ":/system/lib64:/vendor/lib64",
-                "-Djava.net.preferIPv4Stack=true",
+                "-Djava.net.preferIPv4Stack=false",
                 "-Djava.net.preferIPv4Addresses=true",
                 "-Dpaper.disable-watchdog=true",
                 "-Dspigot.watchdog.disabled=true",
