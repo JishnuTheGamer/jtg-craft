@@ -300,14 +300,25 @@ public class FileManagerPlugin extends Plugin {
     public void write(PluginCall call) {
         try {
             String rel = call.getString("path", "");
-            String data = call.getString("data", "");
+            String data = call.getString("data", null);
+            if (data == null) {
+                data = call.getString("content", "");
+            }
+            boolean isBase64 = call.getBoolean("base64", false);
             File f = resolveSafePath(rel);
 
             File parent = f.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
 
-            try (FileWriter writer = new FileWriter(f)) {
-                writer.write(data);
+            if (isBase64 && data != null && !data.isEmpty()) {
+                byte[] bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
+                try (FileOutputStream fos = new FileOutputStream(f)) {
+                    fos.write(bytes);
+                }
+            } else {
+                try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(f), java.nio.charset.StandardCharsets.UTF_8)) {
+                    writer.write(data != null ? data : "");
+                }
             }
 
             JSObject ret = new JSObject();
@@ -468,29 +479,84 @@ public class FileManagerPlugin extends Plugin {
         }).start();
     }
 
-    // ── Plugin Manager (Modrinth CDN) ─────────────────────────
+    // ── Plugin Manager (Modrinth CDN & Curated) ───────────────
     @PluginMethod
     public void pluginInstall(PluginCall call) {
         new Thread(() -> {
+            File tmpJar = null;
             try {
                 String downloadUrl = call.getString("downloadUrl", "");
-                if (downloadUrl == null || downloadUrl.isEmpty()) {
+                if (downloadUrl == null || downloadUrl.trim().isEmpty()) {
                     downloadUrl = call.getString("url", "");
                 }
-                String fileName = call.getString("fileName", "plugin.jar");
+                if (downloadUrl == null || downloadUrl.trim().isEmpty()) {
+                    call.reject("Missing plugin download URL");
+                    return;
+                }
+                downloadUrl = downloadUrl.trim();
+
+                String rawFileName = call.getString("fileName", "plugin.jar");
+                if (rawFileName == null || rawFileName.trim().isEmpty()) rawFileName = "plugin.jar";
+                String fileName = new File(rawFileName).getName().replaceAll("[\\\\/:*?\"<>|]", "");
+                if (!fileName.toLowerCase().endsWith(".jar")) {
+                    fileName += ".jar";
+                }
+
                 File pluginsDir = new File(getDefaultServerDir(), "plugins");
                 if (!pluginsDir.exists()) pluginsDir.mkdirs();
 
                 File targetJar = new File(pluginsDir, fileName);
+                tmpJar = new File(pluginsDir, fileName + ".part." + System.currentTimeMillis());
 
-                URL u = new URL(downloadUrl);
-                HttpURLConnection c = (HttpURLConnection) u.openConnection();
-                c.setInstanceFollowRedirects(true);
-                c.connect();
+                String currentUrl = downloadUrl;
+                HttpURLConnection c = null;
+                int redirects = 0;
+                long totalBytes = -1;
 
-                long totalBytes = c.getContentLengthLong();
-                try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(targetJar)) {
-                    byte[] buf = new byte[8192];
+                while (redirects < 10) {
+                    URL u = new URL(currentUrl);
+                    c = (HttpURLConnection) u.openConnection();
+                    c.setConnectTimeout(25000);
+                    c.setReadTimeout(60000);
+                    c.setInstanceFollowRedirects(false);
+                    c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 11; JtgCraft Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 JtgCraft/1.0");
+                    c.setRequestProperty("Accept", "*/*");
+                    c.setRequestProperty("Accept-Encoding", "identity");
+
+                    int responseCode = c.getResponseCode();
+
+                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+                        responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
+                        responseCode == 307 || responseCode == 308) {
+                        
+                        String location = c.getHeaderField("Location");
+                        c.disconnect();
+                        if (location == null || location.trim().isEmpty()) {
+                            throw new IOException("Redirect status " + responseCode + " but Location header was missing");
+                        }
+                        URL nextUrl = new URL(u, location.trim());
+                        currentUrl = nextUrl.toExternalForm();
+                        redirects++;
+                        continue;
+                    }
+
+                    if (responseCode < 200 || responseCode >= 300) {
+                        c.disconnect();
+                        throw new IOException("Server returned HTTP " + responseCode + " (" + c.getResponseMessage() + ")");
+                    }
+
+                    totalBytes = c.getContentLengthLong();
+                    break;
+                }
+
+                if (c == null) {
+                    throw new IOException("Too many redirects attempting to download " + fileName);
+                }
+
+                try (InputStream in = new BufferedInputStream(c.getInputStream());
+                     FileOutputStream out = new FileOutputStream(tmpJar)) {
+                    byte[] buf = new byte[16384];
                     int n;
                     long downloaded = 0;
                     long lastNotify = 0;
@@ -498,7 +564,7 @@ public class FileManagerPlugin extends Plugin {
                         out.write(buf, 0, n);
                         downloaded += n;
                         long now = System.currentTimeMillis();
-                        if (now - lastNotify > 300) {
+                        if (now - lastNotify > 200) {
                             lastNotify = now;
                             JSObject prog = new JSObject();
                             prog.put("fileName", fileName);
@@ -509,17 +575,53 @@ public class FileManagerPlugin extends Plugin {
                             notifyListeners("plugin-download-progress", prog);
                         }
                     }
+                    out.flush();
+                } finally {
+                    try { c.disconnect(); } catch (Throwable ignored) {}
                 }
-                c.disconnect();
+
+                if (!tmpJar.exists() || tmpJar.length() == 0) {
+                    if (tmpJar.exists()) tmpJar.delete();
+                    throw new IOException("Downloaded plugin file was empty (0 bytes).");
+                }
+
+                if (targetJar.exists()) {
+                    targetJar.delete();
+                }
+                if (!tmpJar.renameTo(targetJar)) {
+                    copyFile(tmpJar, targetJar);
+                    tmpJar.delete();
+                }
+
+                JSObject finalProg = new JSObject();
+                finalProg.put("fileName", fileName);
+                finalProg.put("downloaded", targetJar.length());
+                finalProg.put("total", targetJar.length());
+                finalProg.put("pct", 100);
+                notifyListeners("plugin-download-progress", finalProg);
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
                 ret.put("fileName", fileName);
+                ret.put("size", targetJar.length());
                 call.resolve(ret);
             } catch (Exception e) {
+                if (tmpJar != null && tmpJar.exists()) {
+                    try { tmpJar.delete(); } catch (Throwable ignored) {}
+                }
                 call.reject("Plugin install failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    private void copyFile(File src, File dst) throws IOException {
+        try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[16384];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+        }
     }
 
     @PluginMethod
@@ -529,6 +631,7 @@ public class FileManagerPlugin extends Plugin {
         if (pluginsDir.exists() && pluginsDir.isDirectory()) {
             File[] jars = pluginsDir.listFiles((dir, name) -> name.endsWith(".jar") || name.endsWith(".jar.disabled"));
             if (jars != null) {
+                Arrays.sort(jars, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
                 for (File j : jars) {
                     JSObject p = new JSObject();
                     p.put("fileName", j.getName());
@@ -551,7 +654,7 @@ public class FileManagerPlugin extends Plugin {
         File pluginsDir = new File(getDefaultServerDir(), "plugins");
         File current = new File(pluginsDir, fn);
         if (!current.exists()) {
-            call.reject("Plugin not found");
+            call.reject("Plugin not found: " + fn);
             return;
         }
         File target;
@@ -560,6 +663,7 @@ public class FileManagerPlugin extends Plugin {
         } else {
             target = new File(pluginsDir, fn + ".disabled");
         }
+        if (target.exists()) target.delete();
         boolean ok = current.renameTo(target);
         JSObject ret = new JSObject();
         ret.put("success", ok);
@@ -572,7 +676,10 @@ public class FileManagerPlugin extends Plugin {
         String fn = call.getString("fileName", "");
         File pluginsDir = new File(getDefaultServerDir(), "plugins");
         File target = new File(pluginsDir, fn);
-        boolean ok = target.delete();
+        boolean ok = true;
+        if (target.exists()) {
+            ok = target.delete();
+        }
         JSObject ret = new JSObject();
         ret.put("success", ok);
         call.resolve(ret);

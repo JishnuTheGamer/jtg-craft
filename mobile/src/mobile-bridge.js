@@ -199,7 +199,8 @@
             icon_url: "https://cdn.modrinth.com/data/l6YH9Als/icon.png",
             downloads: 6200000,
             categories: ["optimization"],
-            defaultFileName: "spark.jar"
+            directDownload: "https://ci.lucko.me/job/spark/lastSuccessfulBuild/artifact/spark-bukkit/build/libs/spark-1.10.187-bukkit.jar",
+            defaultFileName: "spark-bukkit.jar"
         },
         {
             id: "placeholderapi",
@@ -959,7 +960,7 @@
                     url = `https://api.modrinth.com/v2/search?facets=${encodedFacets}&index=downloads&limit=40`;
                 }
 
-                const resp = await fetch(url);
+                const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
                 if (resp.ok) {
                     const data = await resp.json();
                     if (data && Array.isArray(data.hits) && data.hits.length > 0) {
@@ -990,7 +991,7 @@
                     }
                 }
             } catch (err) {
-                console.warn('Modrinth API search error:', err);
+                console.warn('Modrinth API search error, using curated catalog:', err);
             }
 
             // Fallback to curated catalog
@@ -1024,7 +1025,7 @@
             try {
                 const loadersParam = encodeURIComponent(JSON.stringify(['paper', 'spigot', 'bukkit', 'purpur', 'folia']));
                 const filterUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version?loaders=${loadersParam}`;
-                const resp = await fetch(filterUrl);
+                const resp = await fetch(filterUrl, { signal: AbortSignal.timeout(6000) });
                 if (resp.ok) {
                     const data = await resp.json();
                     if (Array.isArray(data) && data.length > 0) versionList = data;
@@ -1034,7 +1035,7 @@
             if (versionList.length === 0) {
                 try {
                     const rawUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
-                    const resp = await fetch(rawUrl);
+                    const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(6000) });
                     if (resp.ok) {
                         const data = await resp.json();
                         if (Array.isArray(data)) versionList = data;
@@ -1043,7 +1044,14 @@
             }
 
             if (versionList.length > 0) {
-                for (const ver of versionList) {
+                const serverLoaders = ['paper', 'spigot', 'bukkit', 'purpur', 'folia'];
+                let preferredVer = versionList.find(v =>
+                    Array.isArray(v.loaders) && v.loaders.some(l => serverLoaders.includes(l.toLowerCase()))
+                ) || versionList[0];
+
+                const orderedVersions = [preferredVer, ...versionList.filter(v => v !== preferredVer)];
+
+                for (const ver of orderedVersions) {
                     if (!Array.isArray(ver.files) || ver.files.length === 0) continue;
                     const jarFiles = ver.files.filter(f =>
                         f.filename &&
@@ -1069,15 +1077,15 @@
                 }
             }
 
-            if (curated) {
+            if (curated && curated.directDownload) {
                 return {
-                    downloadUrl: curated.directDownload || `https://api.modrinth.com/v2/project/${curated.slug}/version`,
+                    downloadUrl: curated.directDownload,
                     fileName: curated.defaultFileName || `${curated.title}.jar`,
                     versionNumber: 'latest'
                 };
             }
 
-            throw new Error('Could not find a downloadable JAR for this plugin on Modrinth.');
+            throw new Error('Could not find a downloadable JAR for this plugin. Please try another plugin or upload a .jar manually.');
         },
 
         pluginInstall: async (opts) => {
@@ -1124,15 +1132,19 @@
             return new Promise((resolve) => {
                 const input = document.createElement('input');
                 input.type = 'file';
-                input.accept = '.jar';
+                input.accept = '.jar,application/java-archive,application/octet-stream,*/*';
                 input.multiple = true;
                 input.style.display = 'none';
                 document.body.appendChild(input);
 
                 input.onchange = async () => {
-                    const files = Array.from(input.files || []);
+                    const allFiles = Array.from(input.files || []);
                     try { document.body.removeChild(input); } catch (_) {}
+                    const files = allFiles.filter(f => f.name.toLowerCase().endsWith('.jar'));
                     if (!files.length) {
+                        if (allFiles.length > 0) {
+                            alert('Please select valid Minecraft plugin .jar files.');
+                        }
                         resolve({ success: false, installed: [] });
                         return;
                     }

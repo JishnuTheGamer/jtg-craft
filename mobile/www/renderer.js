@@ -49,6 +49,16 @@ const initApp = async () => {
             panel.classList.add('active');
         }
         $$(`.nav-item[data-panel="${id}"]`).forEach(nav => nav.classList.add('active'));
+        
+        // Lazy-load panel data whenever panel is displayed
+        if (id === 'panel-plugins') {
+            loadPlugins();
+            loadInstalledPlugins();
+        }
+        if (id === 'panel-files') loadFileManager('');
+        if (id === 'panel-worlds') loadWorlds();
+        if (id === 'panel-players') loadPlayers();
+        if (id === 'panel-props') loadProperties();
         if (id === 'panel-settings') {
             loadChangelog();
             loadSettings();
@@ -463,14 +473,6 @@ const initApp = async () => {
                 const panel = item.dataset.panel;
                 if (!panel) return;
                 showPanel(panel);
-                // Lazy-load panel data
-                if (panel === 'panel-files')   loadFileManager('');
-                if (panel === 'panel-plugins') { loadPlugins(); loadInstalledPlugins(); }
-                if (panel === 'panel-worlds')  loadWorlds();
-                if (panel === 'panel-players') loadPlayers();
-                if (panel === 'panel-props')   loadProperties();
-                if (panel === 'panel-settings') loadSettings();
-                // panel-playit is now a static "Coming Soon" page, no loading needed
             };
         });
         
