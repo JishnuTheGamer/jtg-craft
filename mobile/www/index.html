@@ -32,6 +32,25 @@
     </div>
 </div>
 
+<!-- Independent Splash Screen Failsafe: Guarantees splash NEVER gets stuck under any condition -->
+<script>
+    (function() {
+        var splash = document.getElementById('mobile-splash-screen');
+        if (!splash) return;
+        window.dismissSplashScreen = function() {
+            if (!splash || splash.dataset.dismissed) return;
+            splash.dataset.dismissed = 'true';
+            splash.classList.add('fade-out');
+            setTimeout(function() {
+                splash.style.display = 'none';
+                try { splash.remove(); } catch (_) {}
+            }, 600);
+        };
+        // Auto-dismiss after 1.8 seconds max
+        setTimeout(window.dismissSplashScreen, 1800);
+    })();
+</script>
+
 <!-- ═══════════ CUSTOM TITLE BAR ═══════════ -->
 <header id="titlebar">
     <div class="tb-title">
@@ -688,31 +707,35 @@
 
 <script src="mobile-bridge.js"></script>
 <script>
-    // GitHub OTA Hot-Patch Loader (Enables updates without APK reinstall)
+    // OTA Hot-Patch Version Guard: Discards stale/broken patches from earlier tests
     (function() {
         try {
-            ['mobile/www/style.css', 'mobile/www/mobile-patches.css'].forEach(function(p) {
-                var c = localStorage.getItem('patch_' + p);
-                if (c) {
-                    var s = document.createElement('style');
-                    s.setAttribute('data-hot-patch', p);
-                    s.textContent = c;
-                    document.head.appendChild(s);
-                }
-            });
-            var patchRenderer = localStorage.getItem('patch_mobile/www/renderer.js');
-            if (patchRenderer) {
-                var s = document.createElement('script');
-                s.setAttribute('data-hot-patch', 'renderer.js');
-                s.textContent = patchRenderer;
-                document.body.appendChild(s);
-                return;
+            var bundledCode = 1006;
+            var otaCode = parseInt(localStorage.getItem('installed_ota_version_code') || '0', 10);
+            if (otaCode <= bundledCode) {
+                // Clear any old/corrupted patches so APK's fresh bundled assets take full precedence
+                Object.keys(localStorage).forEach(function(k) {
+                    if (k.indexOf('patch_') === 0) {
+                        localStorage.removeItem(k);
+                    }
+                });
+                localStorage.setItem('installed_ota_version_code', String(bundledCode));
+                localStorage.setItem('installed_ota_version', '1.0.6');
+            } else {
+                // Only load CSS patches if genuinely newer than bundled APK
+                ['mobile/www/style.css', 'mobile/www/mobile-patches.css'].forEach(function(p) {
+                    var c = localStorage.getItem('patch_' + p);
+                    if (c) {
+                        var s = document.createElement('style');
+                        s.setAttribute('data-hot-patch', p);
+                        s.textContent = c;
+                        document.head.appendChild(s);
+                    }
+                });
             }
         } catch (_) {}
-        var s = document.createElement('script');
-        s.src = 'renderer.js';
-        document.body.appendChild(s);
     })();
 </script>
+<script src="renderer.js"></script>
 </body>
 </html>

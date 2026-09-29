@@ -2,7 +2,7 @@
 //  Jtg-craft — Renderer (all UI logic)
 // ============================================================
 
-document.addEventListener('DOMContentLoaded', async () => {
+const initApp = async () => {
 
     // ── Helpers ─────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
@@ -62,45 +62,57 @@ document.addEventListener('DOMContentLoaded', async () => {
         return (bytes / 1024 / 1024).toFixed(1) + ' MB';
     }
 
-    // ── Title bar ───────────────────────────────────────────
-    $('#tb-min').onclick  = () => window.api.winMinimize();
-    $('#tb-max').onclick  = () => window.api.winMaximize();
-    $('#tb-close').onclick = () => window.api.winClose();
-
-    // ── System info for sliders ─────────────────────────────
-    const sysInfo = await window.api.getSystemInfo();
-    const ramMax = Math.max(2048, sysInfo.totalRamMB - 2048); // leave 2GB for OS
-    const cpuMax = sysInfo.cores;
-
-    const sldRam = $('#sld-ram');
-    const sldCpu = $('#sld-cpu');
-    sldRam.max = ramMax;
-    sldRam.value = Math.min(2048, ramMax);
-    sldCpu.max = cpuMax;
-    sldCpu.value = Math.max(1, Math.floor(cpuMax / 2));
-
-    $('#lbl-ram').textContent = sldRam.value;
-    $('#lbl-cpu').textContent = sldCpu.value;
-    $('#lbl-ram-max').textContent = (ramMax / 1024).toFixed(0) + ' GB';
-    $('#lbl-cpu-max').textContent = cpuMax;
-
-    sldRam.oninput = () => { $('#lbl-ram').textContent = sldRam.value; };
-    sldCpu.oninput = () => { $('#lbl-cpu').textContent = sldCpu.value; };
-
-    // ── Opening Splash Screen Dismissal ─────────────────────
+    // ── Opening Splash Screen Dismissal (Global Delegate) ───
     function dismissSplashScreen() {
-        const splash = document.getElementById('mobile-splash-screen');
-        if (!splash || splash.dataset.dismissed) return;
-        splash.dataset.dismissed = 'true';
-        splash.classList.add('fade-out');
-        setTimeout(() => {
-            splash.style.display = 'none';
-            try { splash.remove(); } catch (_) {}
-        }, 650);
+        if (typeof window.dismissSplashScreen === 'function') {
+            window.dismissSplashScreen();
+        } else {
+            const splash = document.getElementById('mobile-splash-screen');
+            if (!splash || splash.dataset.dismissed) return;
+            splash.dataset.dismissed = 'true';
+            splash.classList.add('fade-out');
+            setTimeout(() => {
+                splash.style.display = 'none';
+                try { splash.remove(); } catch (_) {}
+            }, 600);
+        }
     }
 
-    // Safety fallback: guaranteed dismiss after 2.5s maximum
-    setTimeout(dismissSplashScreen, 2500);
+    // Safety fallback: guaranteed dismiss after 2s maximum
+    setTimeout(dismissSplashScreen, 2000);
+
+    // ── Title bar ───────────────────────────────────────────
+    if ($('#tb-min'))   $('#tb-min').onclick   = () => window.api && window.api.winMinimize && window.api.winMinimize();
+    if ($('#tb-max'))   $('#tb-max').onclick   = () => window.api && window.api.winMaximize && window.api.winMaximize();
+    if ($('#tb-close')) $('#tb-close').onclick = () => window.api && window.api.winClose && window.api.winClose();
+
+    // ── System info for sliders (Defensive with fallback) ────
+    try {
+        const sysInfo = (window.api && window.api.getSystemInfo) ? await window.api.getSystemInfo() : { totalRamMB: 4096, cores: 4 };
+        const totalRam = (sysInfo && sysInfo.totalRamMB) ? sysInfo.totalRamMB : 4096;
+        const ramMax = Math.max(2048, totalRam - 2048); // leave 2GB for OS
+        const cpuMax = (sysInfo && sysInfo.cores) ? sysInfo.cores : 4;
+
+        const sldRam = $('#sld-ram');
+        const sldCpu = $('#sld-cpu');
+        if (sldRam) {
+            sldRam.max = ramMax;
+            sldRam.value = Math.min(2048, ramMax);
+            sldRam.oninput = () => { if ($('#lbl-ram')) $('#lbl-ram').textContent = sldRam.value; };
+        }
+        if (sldCpu) {
+            sldCpu.max = cpuMax;
+            sldCpu.value = Math.max(1, Math.floor(cpuMax / 2));
+            sldCpu.oninput = () => { if ($('#lbl-cpu')) $('#lbl-cpu').textContent = sldCpu.value; };
+        }
+
+        if ($('#lbl-ram')) $('#lbl-ram').textContent = (sldRam ? sldRam.value : 2048);
+        if ($('#lbl-cpu')) $('#lbl-cpu').textContent = (sldCpu ? sldCpu.value : 2);
+        if ($('#lbl-ram-max')) $('#lbl-ram-max').textContent = (ramMax / 1024).toFixed(0) + ' GB';
+        if ($('#lbl-cpu-max')) $('#lbl-cpu-max').textContent = cpuMax;
+    } catch (e) {
+        console.warn('System info initialization note:', e);
+    }
 
     // ── Saved directory & version state ─────────────────────
     let savedDir = localStorage.getItem('jtg-install-dir') || '';
@@ -2009,5 +2021,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize mobile app boot flow (storage, splash, direct-to-create or dashboard)
     initAppOnStartup();
-});
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 
