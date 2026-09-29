@@ -495,16 +495,49 @@
 
         <!-- ── BACKUPS ── -->
         <div id="panel-backup" class="panel hidden">
-            <div class="panel-header"><h3>Backup Manager</h3></div>
-            <div class="backup-options">
-                <p>Create a compressed backup of your server files.</p>
-                <div class="btn-group" style="margin-top:1rem">
-                    <button id="btn-backup-full" class="btn primary">Full Server Backup</button>
-                    <button id="btn-backup-worlds" class="btn secondary">Worlds Only</button>
+            <div class="panel-header">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-0);">Backup Manager</h3>
+                    <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-3);">Create, inspect, and restore compressed backups of your server and worlds.</p>
                 </div>
-                <div id="backup-progress" class="progress-wrap hidden" style="margin-top:1.5rem">
+            </div>
+
+            <!-- Backup Storage Location Bar -->
+            <div class="backup-location-card">
+                <div class="backup-loc-info">
+                    <span class="backup-loc-label">📂 Storage Path:</span>
+                    <span id="backup-storage-path" class="backup-loc-path" title="Click copy to copy directory">/storage/emulated/0/JtgCraft/server/backups</span>
+                </div>
+                <button id="btn-copy-backup-path" class="btn secondary btn-sm" type="button" title="Copy backup path">📋 Copy Path</button>
+            </div>
+
+            <!-- Create Backup Action Card -->
+            <div class="backup-create-card">
+                <div class="backup-card-header">
+                    <h4>Create New Backup</h4>
+                    <p>Select what to include in the compressed archive.</p>
+                </div>
+                <div class="btn-group backup-btn-group">
+                    <button id="btn-backup-full" class="btn primary">📦 Full Server Backup</button>
+                    <button id="btn-backup-worlds" class="btn secondary">🌍 Worlds Only</button>
+                </div>
+                <div id="backup-progress" class="progress-wrap hidden" style="margin-top:1.25rem">
                     <div class="progress-track"><div id="backup-bar" class="progress-fill"></div></div>
                     <span id="backup-label" class="progress-label">Creating backup...</span>
+                </div>
+            </div>
+
+            <!-- Backups List Section -->
+            <div class="backups-list-section">
+                <div class="backups-header">
+                    <div class="backups-title-wrap">
+                        <h4>Saved Backups</h4>
+                        <span id="backups-count-badge" class="badge-pill">0</span>
+                    </div>
+                    <button id="btn-refresh-backups" class="btn secondary btn-sm" type="button">🔄 Refresh</button>
+                </div>
+                <div id="backups-list-container" class="backups-list">
+                    <!-- Populated dynamically by renderer.js -->
                 </div>
             </div>
         </div>

@@ -479,6 +479,95 @@ public class FileManagerPlugin extends Plugin {
         }).start();
     }
 
+    @PluginMethod
+    public void backupsList(PluginCall call) {
+        File base = getDefaultServerDir();
+        File backupsDir = new File(base, "backups");
+        if (!backupsDir.exists()) backupsDir.mkdirs();
+
+        JSArray arr = new JSArray();
+        File[] files = backupsDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".zip"));
+        if (files != null) {
+            Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US);
+            for (File f : files) {
+                JSObject b = new JSObject();
+                b.put("fileName", f.getName());
+                b.put("size", f.length());
+                b.put("sizeMB", String.format(Locale.US, "%.1f", f.length() / (1024.0 * 1024.0)));
+                b.put("lastModified", f.lastModified());
+                b.put("dateStr", sdf.format(new Date(f.lastModified())));
+                b.put("type", f.getName().startsWith("worlds_") ? "worlds" : "full");
+                arr.put(b);
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("backups", arr);
+        ret.put("backupsDir", backupsDir.getAbsolutePath());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void backupDelete(PluginCall call) {
+        String fileName = call.getString("fileName", "");
+        if (fileName == null || fileName.trim().isEmpty()) {
+            call.reject("Missing backup file name");
+            return;
+        }
+        File base = getDefaultServerDir();
+        File backupFile = new File(new File(base, "backups"), new File(fileName).getName());
+        boolean ok = backupFile.exists() && backupFile.delete();
+        JSObject ret = new JSObject();
+        ret.put("success", ok);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void backupRestore(PluginCall call) {
+        String fileName = call.getString("fileName", "");
+        if (fileName == null || fileName.trim().isEmpty()) {
+            call.reject("Missing backup file name");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                File base = getDefaultServerDir();
+                File backupFile = new File(new File(base, "backups"), new File(fileName).getName());
+                if (!backupFile.exists()) {
+                    call.reject("Backup file not found: " + fileName);
+                    return;
+                }
+
+                // Extract backup to server root
+                byte[] buf = new byte[16384];
+                try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(backupFile)))) {
+                    ZipEntry entry;
+                    while ((entry = zis.getNextEntry()) != null) {
+                        File dest = new File(base, entry.getName());
+                        if (entry.isDirectory()) {
+                            dest.mkdirs();
+                        } else {
+                            dest.getParentFile().mkdirs();
+                            try (FileOutputStream fos = new FileOutputStream(dest)) {
+                                int len;
+                                while ((len = zis.read(buf)) > 0) {
+                                    fos.write(buf, 0, len);
+                                }
+                            }
+                        }
+                        zis.closeEntry();
+                    }
+                }
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("fileName", fileName);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Restore failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Plugin Manager (Modrinth CDN & Curated) ───────────────
     @PluginMethod
     public void pluginInstall(PluginCall call) {

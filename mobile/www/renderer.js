@@ -59,6 +59,7 @@ const initApp = async () => {
         if (id === 'panel-worlds') loadWorlds();
         if (id === 'panel-players') loadPlayers();
         if (id === 'panel-props') loadProperties();
+        if (id === 'panel-backup') loadBackups();
         if (id === 'panel-settings') {
             loadChangelog();
             loadSettings();
@@ -99,11 +100,13 @@ const initApp = async () => {
     // ── System info for sliders (Defensive with fallback) ────
     let sldRam = null;
     let sldCpu = null;
+    let ramMax = 4096;
+    let cpuMax = 4;
     try {
         const sysInfo = (window.api && window.api.getSystemInfo) ? await window.api.getSystemInfo() : { totalRamMB: 4096, cores: 4 };
         const totalRam = (sysInfo && sysInfo.totalRamMB) ? sysInfo.totalRamMB : 4096;
-        const ramMax = Math.max(2048, totalRam - 2048); // leave 2GB for OS
-        const cpuMax = (sysInfo && sysInfo.cores) ? sysInfo.cores : 4;
+        ramMax = Math.max(2048, totalRam - 2048); // leave 2GB for OS
+        cpuMax = (sysInfo && sysInfo.cores) ? sysInfo.cores : 4;
 
         sldRam = $('#sld-ram');
         sldCpu = $('#sld-cpu');
@@ -1292,22 +1295,172 @@ const initApp = async () => {
         $('#backup-label').textContent = `Backing up... ${pct}%`;
     });
 
-    async function doBackup(mode) {
-        $('#backup-progress').classList.remove('hidden');
-        $('#backup-bar').style.width = '0%';
-        $('#backup-label').textContent = 'Preparing backup...';
+    let currentBackupsDir = '/storage/emulated/0/JtgCraft/server/backups';
+
+    async function loadBackups() {
+        const container = $('#backups-list-container');
+        const countBadge = $('#backups-count-badge');
+        const pathEl = $('#backup-storage-path');
+        if (!container) return;
+
         try {
-            const result = await window.api.createBackup(mode);
-            toast(`Backup complete! (${result.sizeMB} MB)`);
-            $('#backup-label').textContent = `Done — saved to backups folder`;
+            const res = (window.api && window.api.backupsList) ? await window.api.backupsList() : { backups: [], backupsDir: '' };
+            const list = (res && Array.isArray(res.backups)) ? res.backups : [];
+            if (res && res.backupsDir) currentBackupsDir = res.backupsDir;
+            
+            if (pathEl) {
+                pathEl.textContent = currentBackupsDir;
+                pathEl.title = currentBackupsDir;
+            }
+            if (countBadge) countBadge.textContent = list.length;
+
+            container.innerHTML = '';
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div class="backups-empty-state">
+                        <div class="icon" style="font-size: 2rem; margin-bottom: 8px;">🗄️</div>
+                        <h4 style="margin: 0 0 4px; color: var(--text-1);">No Backups Created Yet</h4>
+                        <p style="margin: 0; font-size: 0.85rem; color: var(--text-3);">Create a Full Server or Worlds backup above to protect your server.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'backup-item-row';
+                const isWorlds = item.type === 'worlds' || item.fileName.startsWith('worlds_');
+                const icon = isWorlds ? '🌍' : '📦';
+                const typeName = isWorlds ? 'Worlds Only' : 'Full Server';
+                const typeBadgeClass = isWorlds ? 'badge-worlds' : 'badge-full';
+
+                row.innerHTML = `
+                    <div class="backup-item-info">
+                        <div class="backup-item-icon ${isWorlds ? 'is-worlds' : 'is-full'}">
+                            ${icon}
+                        </div>
+                        <div class="backup-item-meta">
+                            <span class="backup-item-name" title="${item.fileName}">${item.fileName}</span>
+                            <div class="backup-item-details">
+                                <span class="backup-badge ${typeBadgeClass}">${typeName}</span>
+                                <span>•</span>
+                                <span>${item.sizeMB || '0.0'} MB</span>
+                                <span>•</span>
+                                <span>${item.dateStr || ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="backup-item-actions">
+                        <button class="btn-backup-restore btn secondary btn-sm" type="button" title="Restore this backup">♻️ Restore</button>
+                        <button class="btn-backup-delete btn danger btn-sm" type="button" title="Delete backup">🗑️ Delete</button>
+                    </div>
+                `;
+
+                // Restore button handler
+                const btnRestore = row.querySelector('.btn-backup-restore');
+                if (btnRestore) {
+                    btnRestore.onclick = async () => {
+                        if (!confirm(`Are you sure you want to RESTORE "${item.fileName}"?\n\nWarning: This will extract and overwrite server files with the contents of this backup!`)) {
+                            return;
+                        }
+                        btnRestore.disabled = true;
+                        btnRestore.textContent = '⏳ Restoring...';
+                        try {
+                            const r = await window.api.backupRestore(item.fileName);
+                            if (r && r.error) {
+                                toast('Restore failed: ' + r.error, 'error');
+                            } else {
+                                toast(`Backup "${item.fileName}" successfully restored! Please restart the server.`, 'success');
+                            }
+                        } catch (e) {
+                            toast('Restore failed: ' + e.message, 'error');
+                        } finally {
+                            btnRestore.disabled = false;
+                            btnRestore.textContent = '♻️ Restore';
+                        }
+                    };
+                }
+
+                // Delete button handler
+                const btnDel = row.querySelector('.btn-backup-delete');
+                if (btnDel) {
+                    btnDel.onclick = async () => {
+                        if (!confirm(`Are you sure you want to permanently delete backup "${item.fileName}"?`)) {
+                            return;
+                        }
+                        btnDel.disabled = true;
+                        try {
+                            await window.api.backupDelete(item.fileName);
+                            toast(`Backup "${item.fileName}" deleted.`, 'info');
+                            await loadBackups();
+                        } catch (e) {
+                            toast('Delete failed: ' + e.message, 'error');
+                            btnDel.disabled = false;
+                        }
+                    };
+                }
+
+                container.appendChild(row);
+            });
         } catch (e) {
-            toast('Backup failed: ' + e.message, 'error');
-            $('#backup-label').textContent = 'Backup failed.';
+            if (container) {
+                container.innerHTML = `
+                    <div class="backups-empty-state">
+                        <div class="icon">⚠️</div>
+                        <h4 style="color: var(--text-1);">Failed to load backups</h4>
+                        <p style="color: var(--text-3); font-size: 0.85rem;">${e.message}</p>
+                    </div>
+                `;
+            }
         }
     }
 
-    $('#btn-backup-full').onclick = () => doBackup('full');
-    $('#btn-backup-worlds').onclick = () => doBackup('worlds');
+    async function doBackup(mode) {
+        const btnFull = $('#btn-backup-full');
+        const btnWorlds = $('#btn-backup-worlds');
+        if (btnFull) btnFull.disabled = true;
+        if (btnWorlds) btnWorlds.disabled = true;
+        const progressWrap = $('#backup-progress');
+        if (progressWrap) progressWrap.classList.remove('hidden');
+        const bar = $('#backup-bar');
+        if (bar) bar.style.width = '0%';
+        const label = $('#backup-label');
+        if (label) label.textContent = 'Preparing backup...';
+
+        try {
+            const result = await window.api.createBackup(mode);
+            toast(`Backup complete! (${result.sizeMB} MB)`);
+            if (label) label.textContent = `Done — saved to backups folder`;
+            await loadBackups();
+        } catch (e) {
+            toast('Backup failed: ' + e.message, 'error');
+            if (label) label.textContent = 'Backup failed.';
+        } finally {
+            if (btnFull) btnFull.disabled = false;
+            if (btnWorlds) btnWorlds.disabled = false;
+        }
+    }
+
+    const btnBackupFull = $('#btn-backup-full');
+    if (btnBackupFull) btnBackupFull.onclick = () => doBackup('full');
+
+    const btnBackupWorlds = $('#btn-backup-worlds');
+    if (btnBackupWorlds) btnBackupWorlds.onclick = () => doBackup('worlds');
+
+    const btnRefreshBackups = $('#btn-refresh-backups');
+    if (btnRefreshBackups) btnRefreshBackups.onclick = () => loadBackups();
+
+    const btnCopyBackupPath = $('#btn-copy-backup-path');
+    if (btnCopyBackupPath) {
+        btnCopyBackupPath.onclick = () => {
+            if (currentBackupsDir) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(currentBackupsDir);
+                }
+                toast('Storage directory copied: ' + currentBackupsDir, 'success');
+            }
+        };
+    }
 
     // ══════════════════════════════════════════════════════════
     //  SETTINGS
@@ -1449,32 +1602,39 @@ const initApp = async () => {
         });
     }
 
-    $('#btn-settings-reinstall').onclick = async () => {
-        showSettingsProgress('Reinstalling server jar...');
-        try {
-            await window.api.serverReinstall();
-            toast('Reinstall complete!');
-        } catch (e) {
-            toast(e.message, 'error');
-        }
-        $('#settings-progress').classList.add('hidden');
-    };
+    const btnSettingsReinstall = $('#btn-settings-reinstall');
+    if (btnSettingsReinstall) {
+        btnSettingsReinstall.onclick = async () => {
+            showSettingsProgress('Reinstalling server jar...');
+            try {
+                await window.api.serverReinstall();
+                toast('Reinstall complete!');
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+            $('#settings-progress').classList.add('hidden');
+        };
+    }
 
-    $('#btn-settings-version').onclick = async () => {
-        const ver = $('#settings-version-select').value;
-        if (!ver) return;
-        if (!confirm(`Change server version to ${ver}? This will download the new jar.`)) return;
-        
-        showSettingsProgress(`Downloading version ${ver}...`);
-        try {
-            await window.api.serverChangeVersion(ver);
-            toast(`Version successfully changed to ${ver}`);
-            loadSettings(); // refresh java active status
-        } catch (e) {
-            toast(e.message, 'error');
-        }
-        $('#settings-progress').classList.add('hidden');
-    };
+    const btnSettingsVersion = $('#btn-settings-version');
+    if (btnSettingsVersion) {
+        btnSettingsVersion.onclick = async () => {
+            const selVer = $('#settings-version-select');
+            const ver = selVer ? selVer.value : '';
+            if (!ver) return;
+            if (!confirm(`Change server version to ${ver}? This will download the new jar.`)) return;
+            
+            showSettingsProgress(`Downloading version ${ver}...`);
+            try {
+                await window.api.serverChangeVersion(ver);
+                toast(`Version successfully changed to ${ver}`);
+                loadSettings(); // refresh java active status
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+            $('#settings-progress').classList.add('hidden');
+        };
+    }
 
     const btnSettingsJava = $('#btn-settings-java');
     if (btnSettingsJava) {
@@ -1519,23 +1679,27 @@ const initApp = async () => {
         };
     }
 
-    $('#btn-settings-delete').onclick = async () => {
-        if (!confirm('Are you absolutely sure you want to DELETE this server and all its files? This CANNOT be undone!')) return;
-        try {
-            await window.api.serverDelete();
-            toast('Server deleted.');
-            if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
-            $('#sidebar-server-name').textContent = 'Server';
-            const drName = $('#drawer-server-name');
-            if (drName) drName.textContent = 'Server';
+    const btnSettingsDelete = $('#btn-settings-delete');
+    if (btnSettingsDelete) {
+        btnSettingsDelete.onclick = async () => {
+            if (!confirm('Are you absolutely sure you want to DELETE this server and all its files? This CANNOT be undone!')) return;
+            try {
+                await window.api.serverDelete();
+                toast('Server deleted.');
+                if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+                const sbName = $('#sidebar-server-name');
+                if (sbName) sbName.textContent = 'Server';
+                const drName = $('#drawer-server-name');
+                if (drName) drName.textContent = 'Server';
 
-            // Cleanly reset create screen so it is never stuck or disabled
-            resetCreateScreen();
-            showScreen('screen-create');
-            checkAndDisplayStorageBanner(savedDir);
-        } catch (e) {
-            toast(e.message, 'error');
-        }
+                // Cleanly reset create screen so it is never stuck or disabled
+                resetCreateScreen();
+                showScreen('screen-create');
+                checkAndDisplayStorageBanner(savedDir);
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+        };
     };
 
     // ══════════════════════════════════════════════════════════

@@ -25,8 +25,8 @@
     const CapApp        = (Cap.Plugins && Cap.Plugins.App) ? Cap.Plugins.App : {};
 
     // ── Mobile Update Config (GitHub Data Center) ───────────────
-    const BUNDLED_APP_VERSION = '1.0.6';
-    const BUNDLED_APP_VERSION_CODE = 1006;
+    const BUNDLED_APP_VERSION = '1.0.7';
+    const BUNDLED_APP_VERSION_CODE = 1007;
 
     const MOBILE_GITHUB_CONFIG = {
         owner: 'JishnuTheGamer',
@@ -51,6 +51,17 @@
             if (rv < cv) return false;
         }
         return false;
+    }
+
+    function createTimeoutSignal(ms) {
+        if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+            try { return AbortSignal.timeout(ms); } catch (_) {}
+        }
+        try {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), ms);
+            return controller.signal;
+        } catch (_) { return undefined; }
     }
 
     // ── Curated Top Minecraft Plugins Catalog ───────────────────
@@ -983,7 +994,7 @@
                     url = `https://api.modrinth.com/v2/search?facets=${encodedFacets}&index=downloads&limit=40`;
                 }
 
-                const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+                const resp = await fetch(url, { signal: createTimeoutSignal(6000) });
                 if (resp.ok) {
                     const data = await resp.json();
                     if (data && Array.isArray(data.hits) && data.hits.length > 0) {
@@ -1048,7 +1059,7 @@
             try {
                 const loadersParam = encodeURIComponent(JSON.stringify(['paper', 'spigot', 'bukkit', 'purpur', 'folia']));
                 const filterUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version?loaders=${loadersParam}`;
-                const resp = await fetch(filterUrl, { signal: AbortSignal.timeout(6000) });
+                const resp = await fetch(filterUrl, { signal: createTimeoutSignal(6000) });
                 if (resp.ok) {
                     const data = await resp.json();
                     if (Array.isArray(data) && data.length > 0) versionList = data;
@@ -1058,7 +1069,7 @@
             if (versionList.length === 0) {
                 try {
                     const rawUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
-                    const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(6000) });
+                    const resp = await fetch(rawUrl, { signal: createTimeoutSignal(6000) });
                     if (resp.ok) {
                         const data = await resp.json();
                         if (Array.isArray(data)) versionList = data;
@@ -1222,6 +1233,24 @@
                 };
             }
             return { success: true, sizeMB: '0.0' };
+        },
+        backupsList: async () => {
+            if (FileManager.backupsList) {
+                return await FileManager.backupsList();
+            }
+            return { backups: [], backupsDir: '' };
+        },
+        backupDelete: async (fileName) => {
+            if (FileManager.backupDelete) {
+                return await FileManager.backupDelete({ fileName });
+            }
+            return { success: true };
+        },
+        backupRestore: async (fileName) => {
+            if (FileManager.backupRestore) {
+                return await FileManager.backupRestore({ fileName });
+            }
+            return { success: true };
         },
 
         // ── Updates (GitHub Data Center OTA) ──────────────────

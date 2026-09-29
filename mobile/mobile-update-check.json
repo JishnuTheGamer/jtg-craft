@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "versionCode": 1006,
+  "version": "1.0.7",
+  "versionCode": 1007,
   "releaseDate": "2026-09-29",
   "channel": "mobile-production",
   "updateMode": "data-center-ota",
@@ -18,6 +18,20 @@
     "mobile/mobile-update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.7",
+      "versionCode": 1007,
+      "date": "2026-09-29",
+      "type": "patch",
+      "title": "Control Buttons, Plugin Manager & Backup Management Suite v1.0.7",
+      "changes": [
+        "Fixed JavaScript initialization crash restoring all Settings buttons (reinstall, delete server, Java selector, sliders)",
+        "Fixed Modrinth API timeout compatibility for Android WebView so Plugin Manager browse and search work smoothly",
+        "Added full Backup Management Suite with live backup file listing, creation date, size, and type indicators",
+        "Added 1-tap Restore and Delete controls for backups, plus directory path inspection (/storage/emulated/0/JtgCraft/server/backups)",
+        "Automatic bytecode patching for Playit plugin forcing IPv4 to resolve UnsupportedAddressTypeException"
+      ]
+    },
     {
       "version": "1.0.6",
       "versionCode": 1006,
