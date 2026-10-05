@@ -1,48 +1,73 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 
-# Publish assets before main's manifests can notify existing installations.
+# Replace existing V1 downloads before activating their stable URLs in main.
 gh auth status
-if ($LASTEXITCODE -ne 0) { throw 'GitHub login is required. Run gh auth login first.' }
+if ($LASTEXITCODE -ne 0) { throw 'GitHub login is required.' }
 node tools/check-release.cjs
-if ($LASTEXITCODE -ne 0) { throw 'Release verification failed; nothing was published.' }
+if ($LASTEXITCODE -ne 0) { throw 'Release verification failed.' }
 git fetch origin main
-if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the remote main branch.' }
+if ($LASTEXITCODE -ne 0) { throw 'Could not fetch main.' }
 git merge-base --is-ancestor origin/main HEAD
-if ($LASTEXITCODE -ne 0) { throw 'Remote main has changes that need to be reviewed before publishing.' }
+if ($LASTEXITCODE -ne 0) { throw 'Remote changes need review before publishing.' }
 git add -- .gitattributes .gitignore README.md RELEASE-NOTES.md lib tools ui main.js preload.js package.json package-lock.json src update-check.json mobile/android/app/build.gradle mobile/android/app/src/main mobile/build-apk.ps1 mobile/capacitor.config.ts mobile/mobile-update-check.json mobile/package.json mobile/package-lock.json mobile/src mobile/www mobile/native
 if ($LASTEXITCODE -ne 0) { throw 'Could not stage release sources.' }
 git diff --cached --quiet
 if ($LASTEXITCODE -eq 1) {
-    git commit -m 'feat: premium UI, verified app updates and Android Java 25 support'
-    if ($LASTEXITCODE -ne 0) { throw 'Could not commit release sources.' }
+    git commit -m 'fix: preserve original V1 release download links and filenames'
+    if ($LASTEXITCODE -ne 0) { throw 'Could not commit sources.' }
 }
-$releaseCommit = (git rev-parse HEAD).Trim()
 git push origin 'HEAD:refs/heads/codex/release-v1.0.4'
-if ($LASTEXITCODE -ne 0) { throw 'Could not publish the release source branch.' }
-gh release create v1.0.4 --target $releaseCommit --draft --title 'JTG Craft — PC 1.0.4 / Android 1.0.8' --notes-file RELEASE-NOTES.md
-if ($LASTEXITCODE -ne 0) { throw 'Could not create the draft release. Existing releases were kept.' }
-gh release upload v1.0.4 'dist/Jtg-craft-Setup-1.0.4.exe' 'dist/Jtg-craft-Setup-1.0.4.exe.blockmap' 'dist/latest.yml' 'mobile/apk/jtg-craft-mobile-v1.apk'
-if ($LASTEXITCODE -ne 0) { throw 'Asset upload failed. Release remains a draft and main is unchanged.' }
-$releaseList = gh api repos/JishnuTheGamer/jtg-craft/releases | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Could not verify uploaded assets.' }
-$matchingReleases = @($releaseList | Where-Object { $_.tag_name -eq 'v1.0.4' -and $_.draft })
-if ($matchingReleases.Count -ne 1) { throw 'Expected exactly one uploaded draft release.' }
-$remoteRelease = $matchingReleases[0]
-$expectedAssets = @('Jtg-craft-Setup-1.0.4.exe', 'Jtg-craft-Setup-1.0.4.exe.blockmap', 'latest.yml', 'jtg-craft-mobile-v1.apk')
-if ($remoteRelease.assets.Count -ne $expectedAssets.Count) { throw 'Release asset count mismatch; release remains a draft.' }
-foreach ($expectedAsset in $expectedAssets) {
-    if (-not ($remoteRelease.assets | Where-Object { $_.name -eq $expectedAsset })) { throw "Missing release asset: $expectedAsset" }
+if ($LASTEXITCODE -ne 0) { throw 'Could not publish release source branch.' }
+
+$releaseTag = 'jtgcraft_v1'
+$releaseApi = 'repos/JishnuTheGamer/jtg-craft/releases'
+$remoteRelease = gh api "$releaseApi/tags/$releaseTag" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $remoteRelease.draft) { throw 'Existing public V1 release not found.' }
+$releaseId = $remoteRelease.id
+$expectedAssets = @('Jtg-craft.Setup.1.0.0.exe', 'jtg-craft-mobile-v1.apk')
+$stageDirectory = Join-Path $PWD 'ui-preview/release-stage'
+New-Item -ItemType Directory -Path $stageDirectory -Force | Out-Null
+$pendingFiles = @()
+foreach ($name in $expectedAssets) {
+    $localAsset = if ($name.EndsWith('.apk')) { Join-Path 'mobile/apk' $name } else { Join-Path 'dist' $name }
+    $pendingPath = Join-Path $stageDirectory ($name + '.pending')
+    Copy-Item -LiteralPath $localAsset -Destination $pendingPath -Force
+    $pendingFiles += $pendingPath
 }
-foreach ($asset in $remoteRelease.assets) {
-    $localAsset = if ($asset.name.EndsWith('.apk')) { Join-Path 'mobile/apk' $asset.name } else { Join-Path 'dist' $asset.name }
-    if (-not (Test-Path -LiteralPath $localAsset)) { throw "Unexpected release asset: $($asset.name)" }
-    if ($asset.size -ne (Get-Item -LiteralPath $localAsset).Length) { throw "Asset size mismatch: $($asset.name)" }
+# Verify both staged uploads while original download links still work.
+gh release upload $releaseTag @pendingFiles --clobber
+if ($LASTEXITCODE -ne 0) { throw 'Staged upload failed; original assets were kept.' }
+$remoteRelease = gh api "$releaseApi/$releaseId" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Staged upload lookup failed; originals were kept.' }
+foreach ($name in $expectedAssets) {
+    $pending = @($remoteRelease.assets | Where-Object { $_.name -eq ($name + '.pending') })
+    $localAsset = Join-Path $stageDirectory ($name + '.pending')
     $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $localAsset -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($asset.digest -and $asset.digest -ne $expectedDigest) { throw "GitHub asset digest mismatch: $($asset.name)" }
+    if ($pending.Count -ne 1 -or $pending[0].size -ne (Get-Item -LiteralPath $localAsset).Length -or $pending[0].digest -ne $expectedDigest) { throw "Staged verification failed: $name" }
 }
-gh api --method PATCH "repos/JishnuTheGamer/jtg-craft/releases/$($remoteRelease.id)" -F draft=false --silent
-if ($LASTEXITCODE -ne 0) { throw 'Release could not be made available; main is unchanged.' }
+foreach ($name in $expectedAssets) {
+    $oldAsset = $remoteRelease.assets | Where-Object { $_.name -eq $name }
+    $pending = $remoteRelease.assets | Where-Object { $_.name -eq ($name + '.pending') }
+    if ($oldAsset) {
+        gh api --method DELETE "$releaseApi/assets/$($oldAsset.id)" --silent
+        if ($LASTEXITCODE -ne 0) { throw "Could not replace original asset: $name" }
+    }
+    gh api --method PATCH "$releaseApi/assets/$($pending.id)" -f name=$name --silent
+    if ($LASTEXITCODE -ne 0) { throw "Replacement rename failed: $name. Verified pending bytes remain available." }
+}
+$remoteRelease = gh api "$releaseApi/$releaseId" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Final V1 asset lookup failed.' }
+foreach ($name in $expectedAssets) {
+    $asset = @($remoteRelease.assets | Where-Object { $_.name -eq $name })
+    $localAsset = Join-Path $stageDirectory ($name + '.pending')
+    $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $localAsset -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($asset.Count -ne 1 -or $asset[0].digest -ne $expectedDigest -or $asset[0].size -ne (Get-Item -LiteralPath $localAsset).Length) { throw "Final verification failed: $name" }
+}
+gh release edit $releaseTag --notes-file RELEASE-NOTES.md
+if ($LASTEXITCODE -ne 0) { throw 'Could not update V1 release notes.' }
+gh api --method PATCH "$releaseApi/$releaseId" -f make_latest=true --silent
+if ($LASTEXITCODE -ne 0) { throw 'Could not mark V1 as latest.' }
 git push origin 'HEAD:refs/heads/main'
-if ($LASTEXITCODE -ne 0) { throw 'Release assets are available but main was not advanced. Resolve the main-branch changes before enabling update notifications.' }
-Write-Output 'Published PC 1.0.4 / Android 1.0.8: https://github.com/JishnuTheGamer/jtg-craft/releases/tag/v1.0.4'
+if ($LASTEXITCODE -ne 0) { throw 'V1 assets are updated but main could not be advanced.' }
+Write-Output 'Updated original V1 release: https://github.com/JishnuTheGamer/jtg-craft/releases/tag/jtgcraft_v1'

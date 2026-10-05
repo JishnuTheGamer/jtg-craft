@@ -58,9 +58,13 @@ Android installation dialog still require a phone test.
 Run `node tools/sync-ui.cjs` and `node tools/prepare-release.cjs` before building.
 After both builds, copy the APK to `mobile/apk/jtg-craft-mobile-v1.apk` and run
 `node tools/prepare-release.cjs --artifacts` to finalize its hash and normalize
-the PC installer filename to match `latest.yml`.
+the PC installer filename to the original `Jtg-craft.Setup.1.0.0.exe` download name.
 
-Publish source at tag `v1.0.4` and upload `Jtg-craft-Setup-1.0.4.exe`, its
-`.blockmap`, `latest.yml`, and `jtg-craft-mobile-v1.apk`. The tag contains both
-independent platform versions. Make release assets available before advancing
-`main`, so existing clients see a notification only after downloads are ready.
+Source at immutable tag `v1.0.4` supplies the verified web files for both
+independent platform versions. Replace only the APK and EXE assets in the
+existing `jtgcraft_v1` release, preserving the exact public filenames
+`jtg-craft-mobile-v1.apk` and `Jtg-craft.Setup.1.0.0.exe`. Their contents are
+Android 1.0.8 and PC 1.0.4 respectively; the old filename does not describe the
+installed version. Keep the original V1 tag and shared download URLs unchanged.
+Verify replaced assets before advancing `main`; new manifests refer to these
+stable V1 URLs. No separate binary release is required.

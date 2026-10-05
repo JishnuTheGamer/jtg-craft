@@ -10,7 +10,11 @@ for (const name of ['update-check.json','mobile/mobile-update-check.json']) {
             assert(!fs.readFileSync(file,'utf8').includes('\r\n'),'Noncanonical OTA line endings: '+file);
         }
     }
-    const artifact = name.startsWith('mobile/') ? 'mobile/apk/jtg-craft-mobile-v1.apk' : 'dist/Jtg-craft-Setup-1.0.4.exe';
+    const artifact = name.startsWith('mobile/') ? 'mobile/apk/jtg-craft-mobile-v1.apk' : 'dist/Jtg-craft.Setup.1.0.0.exe';
+    const filename = name.startsWith('mobile/') ? 'jtg-craft-mobile-v1.apk' : 'Jtg-craft.Setup.1.0.0.exe';
+    const stableUrl = 'https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/' + filename;
+    assert.equal(manifest.downloadUrl, stableUrl);
+    assert.equal(manifest.nativeUpdate.url, stableUrl);
     assert.equal(sha(artifact),manifest.nativeUpdate.sha256,artifact);
     assert.equal(fs.statSync(artifact).size,manifest.nativeUpdate.size);
     for (const file of manifest.files.filter(f=>f!==name)) {

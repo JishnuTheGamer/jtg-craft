@@ -155,11 +155,11 @@
   "nativeUpdate": {
     "version": "1.0.8",
     "versionCode": 8,
-    "url": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/v1.0.4/jtg-craft-mobile-v1.apk",
+    "url": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/jtg-craft-mobile-v1.apk",
     "sha256": "b64efc1031ff0591b38fccb7057fa02658df8f345c7037d1cb05a6d6e0a0c3d3",
     "size": 5371399
   },
-  "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/v1.0.4/jtg-craft-mobile-v1.apk",
+  "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/jtg-craft-mobile-v1.apk",
   "sha256": {
     "mobile/www/index.html": "239c3ff1d9785091e83a4a9515368bd76fe5e5bb83434c818581d595bdfedd36",
     "mobile/www/style.css": "cb20be6582ff43d7393881748404d216db55738a9a9e7fca48a9a900e171629d",

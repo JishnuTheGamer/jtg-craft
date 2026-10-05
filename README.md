@@ -65,7 +65,7 @@ A powerful, all-in-one server application designed to create, configure, manage,
 
 ## 💻 Getting Started
 
-1. **Download**: Grab the latest installer (`Jtg-craft-Setup-1.0.4.exe`) from the [Official Releases](https://github.com/JishnuTheGamer/jtg-craft/releases).
+1. **Download**: Grab the latest installer (`Jtg-craft.Setup.1.0.0.exe`) from the [V1 release](https://github.com/JishnuTheGamer/jtg-craft/releases/tag/jtgcraft_v1). The filename stays unchanged for shared links; it contains the current PC version.
 2. **Install**: Run the installer and follow the quick on-screen setup.
 3. **Launch & Create**:
    - Select an install directory on your computer.
