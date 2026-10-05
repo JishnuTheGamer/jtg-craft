@@ -133,22 +133,21 @@
         <div id="storage-perm-banner" class="storage-perm-banner">
             <div class="storage-perm-icon">📂</div>
             <div class="storage-perm-text">
-                <strong>Storage Access Recommended</strong>
-                <span>Allow "All Files Access" so Jtg-craft can create your server folder in phone storage for easy editing in file managers.</span>
+                <strong>Phone Storage permission</strong>
+                <span>Tap Allow Storage. On Android 11+, enable “Allow access to manage all files” and return here. Older Android versions show a storage permission dialog.</span>
             </div>
-            <button type="button" id="btn-grant-storage" class="btn primary sm">Grant Permission</button>
+            <button type="button" id="btn-grant-storage" class="btn primary sm">Allow Storage</button>
         </div>
 
         <div class="field">
             <label>Install Directory</label>
             <div class="field-row">
-                <input type="text" id="inp-dir" value="/storage/emulated/0/JtgCraft/server" placeholder="Enter or choose server folder...">
-                <button id="btn-pick-dir" class="btn secondary sm">Browse</button>
+                <input type="text" id="inp-dir" readonly value="/storage/emulated/0/JtgCraft/server" placeholder="Enter or choose server folder...">
+
             </div>
             <div class="dir-presets">
                 <button type="button" class="dir-preset-chip active" data-dir="/storage/emulated/0/JtgCraft/server">📱 Phone Storage (Accessible in Files)</button>
-                <button type="button" class="dir-preset-chip" data-dir="/storage/emulated/0/Download/JtgCraft/server">📁 Downloads Folder</button>
-                <button type="button" class="dir-preset-chip" data-dir="/data/data/com.jtgcraft.mobile/files/servers/default">⚡ App Storage (Isolated)</button>
+
             </div>
         </div>
 
@@ -161,6 +160,8 @@
         <div class="field">
             <label>Paper Minecraft Version</label>
             <select id="sel-version">
+                <option value="26.2">Paper 26.2 (Auto: Java 25)</option>
+                <option value="26.1.2">Paper 26.1.2 (Auto: Java 25)</option>
                 <option value="1.21.11">Paper 1.21.11 (Requires Java 21)</option>
                 <option value="1.21.4">Paper 1.21.4 (Requires Java 21)</option>
                 <option value="1.21.1">Paper 1.21.1 (Requires Java 21)</option>
@@ -178,7 +179,7 @@
         <div class="field">
             <label>RAM Allocation: <strong id="lbl-ram">2048</strong> MB</label>
             <input type="range" id="sld-ram" min="1024" max="8192" step="256" value="2048">
-            <div class="range-labels"><span>1 GB</span><span id="lbl-ram-max">8 GB</span></div>
+            <div class="range-labels"><span>512 MB</span><span id="lbl-ram-max">8 GB</span></div>
         </div>
 
         <div class="field">
@@ -553,7 +554,7 @@
         <!-- ── SETTINGS ── -->
         <div id="panel-settings" class="panel hidden">
             <h2 class="panel-title">Server Settings</h2>
-            
+
             <div class="settings-grid">
                 <!-- Server Resources & Identity Configuration -->
                 <div class="settings-card server-config-card">
@@ -561,7 +562,7 @@
                     <div class="sc-content">
                         <h3>Server Resources & Identity</h3>
                         <p>Configure server display name, RAM allocation, and CPU cores.</p>
-                        
+
                         <div class="field" style="margin-top: 12px;">
                             <label>Server Name</label>
                             <input type="text" id="settings-inp-name" class="prop-input" placeholder="Server Name" maxlength="32">
@@ -570,7 +571,7 @@
                         <div class="field" style="margin-top: 10px;">
                             <label>RAM Allocation: <strong id="settings-lbl-ram" style="color:var(--accent,#22c55e);">2048</strong> MB</label>
                             <input type="range" id="settings-sld-ram" min="1024" max="8192" step="256" value="2048">
-                            <div class="range-labels"><span>1 GB</span><span id="settings-lbl-ram-max">8 GB</span></div>
+                            <div class="range-labels"><span>512 MB</span><span id="settings-lbl-ram-max">8 GB</span></div>
                         </div>
 
                         <div class="field" style="margin-top: 10px;">

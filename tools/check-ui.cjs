@@ -12,11 +12,11 @@ const mock = `
 window.__calls = []; window.__listeners = {};
 const fixtureProps = ${JSON.stringify(props)};
 const values = {
-getSystemInfo: { totalRamMB: 8192, cores: 8 }, pickDirectory: 'preview-server',
+getSystemInfo: { totalRamMB: 3072, cores: 8 }, pickDirectory: 'preview-server',
 checkDiskSpace: {ok: true, freeGB: 20}, checkExistingServer: {exists: true, name:'Craft Survival'},
-getDefaultStoragePaths: {phoneStorage: 'preview-server'}, getLiveStats: {cpuPercent: 4.2, ramUsedMB: 720, ramTotalMB: 2048},
+getDefaultStoragePaths: {phoneStorage: 'preview-server'}, checkStoragePermission: {granted:true,phoneWritable:true}, getLiveStats: {cpuPercent: 4.2, ramUsedMB: 720, ramTotalMB: 2048},
 propsGet: fixtureProps, fetchPaperVersions: ['1.21.1','1.20.4'], getJavaSettings: {setting:'auto', configuredSetting:'auto', installedPath:'java/bin/java'},
-getAppVersion: '1.0.3', getServerVersion: '1.20.4', getServerConfig: {version:'1.20.4', ram:2048, cpu:2}, getHotUpdateChangelog: [],
+getAppVersion: '1.0.3', getServerVersion: '1.20.4', getServerConfig: {name:'Craft Survival',version:'1.20.4', ram:2048, cpu:2}, getHotUpdateChangelog: [],
 getInstalledPlugins: [], pluginsInstalled: [], pluginList: [], getServerMetadata: {name:'Craft Survival',version:'1.20.4'},
 getNetworkInfo: {sameDeviceJoin:'127.0.0.1:25565',lanJoin:'192.168.1.3:25565'}, checkForUpdatesManual: {updateAvailable:false},
 checkJava: {found:true,version:17}, fmList: [], playersGetCache: [], worldList: []
@@ -116,6 +116,7 @@ async function geometry(page) {
             await page.locator('#property-server-port').fill('25565');
             await page.locator('#property-motd').fill('My updated server');
             await page.locator('#btn-save-props').click();
+            await page.locator('#operation-close').click();
             const saved = await page.evaluate(()=>window.__calls.find(call=>call.key==='propsSave').args[0]);
             assert.equal(saved.motd,'My updated server'); assert.equal(saved['custom-plugin-setting'],'keep-this-value');
             assert.equal(saved['level-type'],'minecraft:custom'); assert(!('undefined' in saved));

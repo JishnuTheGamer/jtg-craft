@@ -1,4 +1,4 @@
-# JTG Craft — PC 1.0.4 / Android 1.0.8
+# JTG Craft — PC 1.0.5 / Android 1.0.9
 
 Both editions use the shared black/crimson interface with eight saved themes,
 searchable and bounded logs, and grouped server properties. Desktop keeps its
@@ -22,7 +22,7 @@ upgrade**. Their loader applied CSS only: saving HTML/JavaScript in localStorage
 did not execute it, and a web patch cannot replace native Java plugins or the
 pointer-tagging library. Stop the server, then install the new APK over the old app; do not uninstall
 it. The package name and signing certificate match the published original APK,
-and the native versionCode increases from 1 to 8.
+and the native versionCode increases to 9.
 
 After this upgrade, Android checks automatically at startup and every 30 minutes.
 Automatic downloads are enabled and can be disabled in Settings. Web updates
@@ -36,8 +36,8 @@ are required; a normal app cannot silently replace its APK.
 
 Auto selects Java 17 for Minecraft 1.17–1.20.4, Java 21 for 1.20.5–1.21.x, and
 Java 25 for 26.x. Paper's current recommended version table is available at
-https://docs.papermc.io/paper/getting-started/. A lower manual Java selection is
-rejected rather than silently substituting a different runtime.
+https://docs.papermc.io/paper/getting-started/. Manual Java 17/21/25 selections are preserved; server and plugin compatibility
+is the user’s choice. Auto selects the runtime required for the Minecraft version.
 
 Windows obtains exact Temurin runtimes from Adoptium and verifies archive hashes.
 Runtime ZIP extraction uses Node streams and validates entry paths, sizes and CRC,
@@ -60,11 +60,18 @@ After both builds, copy the APK to `mobile/apk/jtg-craft-mobile-v1.apk` and run
 `node tools/prepare-release.cjs --artifacts` to finalize its hash and normalize
 the PC installer filename to the original `Jtg-craft.Setup.1.0.0.exe` download name.
 
-Source at immutable tag `v1.0.4` supplies the verified web files for both
+Source at immutable tag `v1.0.5` supplies the verified web files for both
 independent platform versions. Replace only the APK and EXE assets in the
 existing `jtgcraft_v1` release, preserving the exact public filenames
 `jtg-craft-mobile-v1.apk` and `Jtg-craft.Setup.1.0.0.exe`. Their contents are
-Android 1.0.8 and PC 1.0.4 respectively; the old filename does not describe the
+Android 1.0.9 and PC 1.0.5 respectively; the old filename does not describe the
 installed version. Keep the original V1 tag and shared download URLs unchanged.
 Verify replaced assets before advancing `main`; new manifests refer to these
 stable V1 URLs. No separate binary release is required.
+
+Settings operations now show a progress popup. RAM/CPU limits use actual device
+hardware and Android passes ActiveProcessorCount to HotSpot. Phone Storage stays
+the server default with a writable-folder permission check and proper legacy
+permission callbacks. Android 16 compatibility uses the system Bionic allocator,
+an allocation probe, MEMTAG_OPTIONS=off, and disabled compressed object/class
+pointers. The reported 134 crash still needs a server retest on the phone.

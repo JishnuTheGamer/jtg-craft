@@ -12,7 +12,7 @@ const { spawn, exec, execFile } = require('child_process');
 const net      = require('net');
 const axios    = require('axios');
 const archiver = require('archiver');
-const { requiredJava, targetJava } = require('./lib/java-policy.cjs');
+const { requiredJava, targetJava, resourceLimits } = require('./lib/java-policy.cjs');
 const { applyUpdate, prepareInstaller } = require('./lib/update-manager.cjs');
 const { extractRuntimeZip } = require('./lib/zip-runtime.cjs');
 
@@ -626,7 +626,7 @@ ipcMain.handle('install-java', async (_, opts) => {
 ipcMain.handle('get-system-info', () => {
     const totalRamMB = Math.floor(os.totalmem() / 1024 / 1024);
     const cores = os.cpus().length;
-    return { totalRamMB, cores };
+    return { totalRamMB, cores, ...resourceLimits(totalRamMB,cores) };
 });
 
 ipcMain.handle('get-live-stats', async () => {
@@ -1047,7 +1047,8 @@ async function repairMetadata(serverDir, existingMeta = null) {
     meta.jarFileName = foundJar;
     meta.version = detectedVer;
     meta.ram = parseInt(meta.ram, 10) || 2048;
-    meta.cpu = parseInt(meta.cpu, 10) || 2;
+    meta.cpu = Math.min(os.cpus().length, Math.max(1,parseInt(meta.cpu, 10) || 2));
+    meta.ram = Math.min(resourceLimits(os.totalmem()/1024/1024,os.cpus().length).maxRamMB,Math.max(512,parseInt(meta.ram,10)||2048));
     meta.javaVersion = meta.javaVersion || 'auto';
 
     try {
@@ -1096,6 +1097,24 @@ ipcMain.handle('change-version', async (_, version) => {
     const metaPath = path.join(currentServerDir, '.mcmeta.json');
     await fs.writeFile(metaPath, JSON.stringify(metaData, null, 2));
     return metaData;
+});
+
+ipcMain.handle('get-server-config', async () => {
+    if (!currentServerDir) throw new Error('Select a server first.');
+    const meta = await ensureServerMetadata(currentServerDir);
+    return {...meta,name:meta.name || path.basename(currentServerDir),path:currentServerDir};
+});
+ipcMain.handle('save-server-config', async (_, changes) => {
+    if (!currentServerDir) throw new Error('Select a server first.');
+    const meta = await ensureServerMetadata(currentServerDir);
+    const limits = resourceLimits(os.totalmem()/1024/1024,os.cpus().length);
+    if (typeof changes.name !== 'string' || !changes.name.trim() || changes.name.length > 32) throw new Error('Enter a server name up to 32 characters.');
+    if (!Number.isInteger(changes.ram) || changes.ram < 512 || changes.ram > limits.maxRamMB) throw new Error('RAM exceeds this device limit.');
+    if (!Number.isInteger(changes.cpu) || changes.cpu < 1 || changes.cpu > limits.maxCpuCores) throw new Error('CPU cores exceed this device limit.');
+    Object.assign(meta,{name:changes.name.trim(),ram:changes.ram,cpu:changes.cpu});
+    const target = path.join(currentServerDir,'.mcmeta.json');
+    await fs.writeFile(target+'.tmp',JSON.stringify(meta,null,2)); await fs.rename(target+'.tmp',target);
+    return {success:true};
 });
 
 // ── Java Settings IPC Handlers ──────────────────────────────

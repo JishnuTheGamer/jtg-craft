@@ -12,8 +12,9 @@ const plugins = {
         prepareNativeUpdate: async () => { calls.push('native'); return {success:true,nativeUpdate:true}; },
         activateWebUpdate: async () => calls.push('activate'), installNativeUpdate: async () => calls.push('installer')
     },
-    ServerProcess:{prepareForUpdate:async()=>calls.push('stop'),getServerConfig:async()=>({version:'26.1'})},
-    JavaManager:{setJavaVersion:async()=>calls.push('java-setting'),checkJava25:async()=>({installed:false}),installJava:async options=>{calls.push('java-'+options.version);return {success:true};}}
+    SystemInfo:{getSystemInfo:async()=>({totalRamMB:3072,cores:8,maxRamMB:2304,maxCpuCores:8})},
+    ServerProcess:{prepareForUpdate:async()=>calls.push('stop'),getServerConfig:async()=>({version:'26.1',javaVersion:'auto'}),saveServerConfig:async()=>calls.push('config')},
+    JavaManager:{setJavaVersion:async()=>calls.push('java-setting'),checkJava25:async()=>({installed:false}),checkJava21:async()=>({installed:false}),installJava:async options=>{calls.push('java-'+options.version);return {success:true};}}
 };
 const window = {Capacitor:{registerPlugin:name=>plugins[name] || {}}};
 vm.runInNewContext(fs.readFileSync('mobile/src/mobile-bridge.js','utf8'),{window,console:{log:()=>{},warn:()=>{}},setTimeout:()=>{},setInterval:()=>{},AbortSignal,fetch:async()=>({ok:fetchOk,status:503,json:async()=>remote})});
@@ -31,7 +32,10 @@ vm.runInNewContext(fs.readFileSync('mobile/src/mobile-bridge.js','utf8'),{window
     fetchOk=false;await assert.rejects(api.applyGithubHotUpdate(),/503/);assert.equal(calls.length,0);
     fetchOk=true;remote.versionCode=1008;remote.nativeUpdate.versionCode=8;
     assert.equal((await api.checkForUpdatesManual()).updateAvailable,false);
-    const invalid=await api.setJavaVersion('21');assert.equal(invalid.success,false);assert.equal(calls.length,0);
+    assert.equal((await api.getSystemInfo()).totalRamMB,3072);
+    assert.equal((await api.getJavaSettings()).activeVersion,'25');
+    await assert.rejects(api.setJavaVersion('99'));
+    await api.setJavaVersion('21');assert(calls.includes('java-21'));calls.splice(0);
     await api.setJavaVersion('25');assert(calls.includes('java-25'));assert(!calls.includes('java-21'));
     console.log('Mobile bridge: native vs web upgrades, safe activation/install ordering, failed fetch, current-version detection and Java 25 routing passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

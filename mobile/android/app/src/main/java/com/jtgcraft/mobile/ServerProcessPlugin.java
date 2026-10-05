@@ -31,35 +31,9 @@ public class ServerProcessPlugin extends Plugin {
     public static final String KEY_SERVER_DIR = "active_server_dir";
 
     public static File getPreferredStorageRoot(Context ctx) {
-        // Priority 1: Phone Public Storage /storage/emulated/0/JtgCraft/server
-        try {
-            File pub = new File(Environment.getExternalStorageDirectory(), "JtgCraft/server");
-            if (pub.exists() || pub.mkdirs()) {
-                File test = new File(pub, ".probe");
-                if (test.createNewFile()) {
-                    test.delete();
-                    return pub;
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        // Priority 2: App external storage /storage/emulated/0/Android/data/.../files/JtgCraft/server
-        try {
-            File ext = ctx.getExternalFilesDir(null);
-            if (ext != null) {
-                File extDir = new File(ext, "JtgCraft/server");
-                if (extDir.exists() || extDir.mkdirs()) {
-                    return extDir;
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        // Priority 3: Internal app storage
-        File serversRoot = new File(ctx.getFilesDir(), "servers");
-        if (!serversRoot.exists()) serversRoot.mkdirs();
-        File defaultServer = new File(serversRoot, "default");
-        if (!defaultServer.exists()) defaultServer.mkdirs();
-        return defaultServer;
+        // Server files stay in Phone Storage; runtime executables remain private.
+        // Permission failures must be surfaced, never silently change location.
+        return new File(Environment.getExternalStorageDirectory(), "JtgCraft/server");
     }
 
     public static File getActiveServerDir(Context ctx) {
@@ -109,7 +83,7 @@ public class ServerProcessPlugin extends Plugin {
             } catch (Exception ignored) {}
         }
 
-        if (configured == null || configured.trim().isEmpty() || "auto".equalsIgnoreCase(configured.trim())) {
+        if (configured == null || configured.trim().isEmpty()) {
             try {
                 android.content.SharedPreferences prefs = getContext().getSharedPreferences("jtg_java_prefs", Context.MODE_PRIVATE);
                 String prefSetting = prefs.getString("java_version_setting", "auto");
@@ -197,7 +171,7 @@ public class ServerProcessPlugin extends Plugin {
         if (customDir != null && !customDir.trim().isEmpty()) {
             setActiveServerDir(getContext(), customDir);
         }
-        int ramMb = call.getInt("ram", 1024);
+        int ramMb = SystemInfoPlugin.resources(getContext()).ram(call.getInt("ram", 1024));
         new Thread(() -> {
             try {
                 File sdir = getServerDir();
@@ -224,6 +198,8 @@ public class ServerProcessPlugin extends Plugin {
                     obj.put("name", serverName);
                     obj.put("version", version);
                     obj.put("ram", ramMb);
+                    obj.put("cpu", SystemInfoPlugin.resources(getContext()).cpu(call.getInt("cpu", 2)));
+                    obj.put("javaVersion", "auto");
                     obj.put("created", System.currentTimeMillis());
                     obj.put("platform", "android");
                     fw.write(obj.toString());
@@ -540,7 +516,10 @@ public class ServerProcessPlugin extends Plugin {
                 if (obj.has("ram")) allocatedRam = obj.getInt("ram");
             } catch (Exception ignored) {}
         }
-        final int ram = Math.max(512, allocatedRam);
+        ResourceLimits limits = SystemInfoPlugin.resources(getContext());
+        final int ram = limits.ram(allocatedRam);
+        int allocatedCpu = 2;
+        try (FileInputStream input = new FileInputStream(meta)) { byte[] bytes = new byte[(int)meta.length()]; if (input.read(bytes) > 0) allocatedCpu = new org.json.JSONObject(new String(bytes,"UTF-8")).optInt("cpu",2); } catch (Exception ignored) {}
 
         // Setup Java runtime environment paths for mobile ARM64
         File javaHome = javaBin.getParentFile();
@@ -611,11 +590,16 @@ public class ServerProcessPlugin extends Plugin {
                 "--nogui"
         );
         if (javaVer >= 25) pb.command().remove("-noverify");
+        pb.command().add(1, "-XX:ActiveProcessorCount=" + limits.cpu(allocatedCpu));
+        pb.command().add(1, "-XX:-UseCompressedOops");
+        pb.command().add(2, "-XX:-UseCompressedClassPointers");
         pb.directory(sdir);
         pb.redirectErrorStream(true);
 
         java.util.Map<String, String> env = pb.environment();
         env.put("JAVA_HOME", javaHome.getAbsolutePath());
+        env.put("JTG_ANDROID_API_LEVEL", String.valueOf(android.os.Build.VERSION.SDK_INT));
+        env.put("MEMTAG_OPTIONS", "off");
 
         StringBuilder ldPath = new StringBuilder();
         if (tagFix != null && tagFix.exists()) {
@@ -687,8 +671,6 @@ public class ServerProcessPlugin extends Plugin {
             if (line.contains("Failed to get system info for Microarchitecture") ||
                 line.contains("Did not find udev library") ||
                 line.contains("File not found or not readable: /proc/stat") ||
-                line.contains("WARNING: linker:") ||
-                line.contains("is not accessible for the namespace") ||
                 line.contains("Unable to initialise the async-profiler engine") ||
                 line.contains("Using-async-profiler")) {
                 skippingOshiTrace = true;
@@ -1058,133 +1040,59 @@ public class ServerProcessPlugin extends Plugin {
         return arr;
     }
 
-    @PluginMethod
-    public void changeVersion(PluginCall call) {
-        String newVer = call.getString("version", "1.20.4");
-        new Thread(() -> {
-            try {
-                if (isRunning && processInput != null) {
-                    try {
-                        processInput.write("stop\n");
-                        processInput.flush();
-                        if (serverProcess != null) serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    } catch (Exception ignored) {}
-                    isRunning = false;
-                }
-                File sdir = getServerDir();
-                File jar = new File(sdir, "paper.jar");
-                if (jar.exists()) jar.delete();
-
-                JSObject notify = new JSObject();
-                notify.put("step", "version");
-                notify.put("status", "Downloading Paper " + newVer + "...");
-                notify.put("percent", 20);
-                notifyListeners("setup-progress", notify);
-
-                String downloadJarUrl = getPaperDirectUrl(newVer);
-                URL u = new URL(downloadJarUrl);
-                HttpURLConnection conn = (HttpURLConnection) u.openConnection();
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
-                conn.setInstanceFollowRedirects(true);
-                conn.connect();
-
-                long total = conn.getContentLengthLong();
-                try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(jar)) {
-                    byte[] buf = new byte[32768];
-                    int n;
-                    long downloaded = 0;
-                    long lastNotify = 0;
-                    while ((n = in.read(buf)) != -1) {
-                        out.write(buf, 0, n);
-                        downloaded += n;
-                        long now = System.currentTimeMillis();
-                        if (now - lastNotify > 300) {
-                            lastNotify = now;
-                            int pct = total > 0 ? (int) ((downloaded * 100) / total) : 50;
-                            JSObject prog = new JSObject();
-                            prog.put("percent", pct);
-                            prog.put("status", "Downloading Paper " + newVer + " (" + pct + "%)...");
-                            notifyListeners("setup-progress", prog);
-                        }
+    private void stopForConfiguration() throws Exception {
+        if (isStarting) throw new IOException("Server startup is in progress. Wait before changing its version.");
+        if (serverProcess != null && serverProcess.isAlive()) {
+            JSObject status = new JSObject(); status.put("status","Saving and stopping the server…"); notifyListeners("setup-progress",status);
+            if (processInput != null) { processInput.write("save-all\nstop\n"); processInput.flush(); }
+            if (!serverProcess.waitFor(20,java.util.concurrent.TimeUnit.SECONDS)) throw new IOException("Server is still saving. Retry after it stops.");
+        }
+    }
+    private synchronized void downloadPaperJar(String version) throws Exception {
+        stopForConfiguration();
+        File dir = getServerDir(), jar = new File(dir,"paper.jar"), staged = new File(dir,".paper-download.jar.part");
+        HttpURLConnection connection = (HttpURLConnection)new URL(getPaperDirectUrl(version)).openConnection();
+        connection.setConnectTimeout(20000); connection.setReadTimeout(90000);
+        connection.setRequestProperty("User-Agent","JtgCraft/1.0.9 (Android)");
+        try {
+            if (connection.getResponseCode()!=200) throw new IOException("Paper download HTTP " + connection.getResponseCode());
+            long total=connection.getContentLengthLong(), downloaded=0, last=0;
+            try (InputStream input=connection.getInputStream(); FileOutputStream output=new FileOutputStream(staged)) {
+                byte[] buffer=new byte[32768]; int count;
+                while ((count=input.read(buffer))!=-1) {
+                    output.write(buffer,0,count); downloaded+=count;
+                    if (System.currentTimeMillis()-last>250) {
+                        last=System.currentTimeMillis(); JSObject status=new JSObject();
+                        if(total>0)status.put("percent",(int)Math.min(99,downloaded*100/total));
+                        status.put("status","Downloading Paper " + version + " (" + downloaded/1024 + " KB)…"); notifyListeners("setup-progress",status);
                     }
                 }
-                conn.disconnect();
-
-                File meta = new File(sdir, ".mcmeta.json");
-                org.json.JSONObject obj = new org.json.JSONObject();
-                if (meta.exists()) {
-                    try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
-                        StringBuilder sb = new StringBuilder();
-                        String l;
-                        while ((l = br.readLine()) != null) sb.append(l);
-                        obj = new org.json.JSONObject(sb.toString());
-                    } catch (Exception ignored) {}
-                }
-                obj.put("version", newVer);
-                try (FileWriter fw = new FileWriter(meta)) {
-                    fw.write(obj.toString());
-                }
-
-                JSObject res = new JSObject();
-                res.put("success", true);
-                res.put("version", newVer);
-                call.resolve(res);
-            } catch (Exception e) {
-                call.reject("Failed to change version: " + e.getMessage());
+                output.getFD().sync();
             }
+            if (total>0 && downloaded!=total) throw new IOException("Paper download was incomplete; previous server jar was kept.");
+            if (!staged.renameTo(jar)) throw new IOException("Could not activate Paper; previous server jar was kept.");
+        } finally { connection.disconnect(); if(staged.exists())staged.delete(); }
+    }
+    @PluginMethod
+    public void changeVersion(PluginCall call) {
+        String version=call.getString("version","1.20.4");
+        new Thread(() -> {
+            try {
+                downloadPaperJar(version);
+                File meta=new File(getServerDir(),".mcmeta.json");
+                org.json.JSONObject object=new org.json.JSONObject();
+                if(meta.exists()) { try (BufferedReader reader=new BufferedReader(new FileReader(meta))) { StringBuilder data=new StringBuilder(); String line; while((line=reader.readLine())!=null)data.append(line); object=new org.json.JSONObject(data.toString()); } }
+                object.put("version",version);
+                try(FileWriter writer=new FileWriter(meta)){writer.write(object.toString(2));}
+                JSObject result=new JSObject();result.put("success",true);result.put("version",version);call.resolve(result);
+            } catch(Exception error){call.reject("Failed to change version: " + error.getMessage());}
         }).start();
     }
-
     @PluginMethod
     public void reinstall(PluginCall call) {
         new Thread(() -> {
-            try {
-                if (isRunning && processInput != null) {
-                    try {
-                        processInput.write("stop\n");
-                        processInput.flush();
-                        if (serverProcess != null) serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    } catch (Exception ignored) {}
-                    isRunning = false;
-                }
-                File sdir = getServerDir();
-                String ver = "1.20.4";
-                File meta = new File(sdir, ".mcmeta.json");
-                if (meta.exists()) {
-                    try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
-                        StringBuilder sb = new StringBuilder();
-                        String l;
-                        while ((l = br.readLine()) != null) sb.append(l);
-                        org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
-                        if (obj.has("version")) ver = obj.getString("version");
-                    } catch (Exception ignored) {}
-                }
-
-                File jar = new File(sdir, "paper.jar");
-                if (jar.exists()) jar.delete();
-
-                String downloadJarUrl = getPaperDirectUrl(ver);
-                URL u = new URL(downloadJarUrl);
-                HttpURLConnection conn = (HttpURLConnection) u.openConnection();
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 JtgCraft/1.0 (Android)");
-                conn.setInstanceFollowRedirects(true);
-                conn.connect();
-
-                try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(jar)) {
-                    byte[] buf = new byte[32768];
-                    int n;
-                    while ((n = in.read(buf)) != -1) {
-                        out.write(buf, 0, n);
-                    }
-                }
-                conn.disconnect();
-
-                JSObject res = new JSObject();
-                res.put("success", true);
-                call.resolve(res);
-            } catch (Exception e) {
-                call.reject("Reinstall failed: " + e.getMessage());
-            }
+            try { downloadPaperJar(getServerMcVersion());JSObject result=new JSObject();result.put("success",true);call.resolve(result); }
+            catch(Exception error){call.reject("Reinstall failed: " + error.getMessage());}
         }).start();
     }
 
@@ -1355,6 +1263,7 @@ public class ServerProcessPlugin extends Plugin {
         ret.put("cpu", 2);
         ret.put("cpuCores", 2);
         ret.put("version", "1.21.11");
+        ret.put("requiredJavaVersion", getRequiredJavaVersion(getServerMcVersion()));
         if (meta.exists()) {
             try (BufferedReader br = new BufferedReader(new FileReader(meta))) {
                 StringBuilder sb = new StringBuilder();
@@ -1398,14 +1307,14 @@ public class ServerProcessPlugin extends Plugin {
                 obj.put("name", call.getString("name"));
             }
             if (call.hasOption("ram")) {
-                obj.put("ram", call.getInt("ram"));
+                obj.put("ram", SystemInfoPlugin.resources(getContext()).ram(call.getInt("ram")));
             } else if (call.hasOption("ramMB")) {
-                obj.put("ram", call.getInt("ramMB"));
+                obj.put("ram", SystemInfoPlugin.resources(getContext()).ram(call.getInt("ramMB")));
             }
             if (call.hasOption("cpu")) {
-                obj.put("cpu", call.getInt("cpu"));
+                obj.put("cpu", SystemInfoPlugin.resources(getContext()).cpu(call.getInt("cpu")));
             } else if (call.hasOption("cpuCores")) {
-                obj.put("cpu", call.getInt("cpuCores"));
+                obj.put("cpu", SystemInfoPlugin.resources(getContext()).cpu(call.getInt("cpuCores")));
             }
             if (call.hasOption("javaVersion")) {
                 obj.put("javaVersion", call.getString("javaVersion"));

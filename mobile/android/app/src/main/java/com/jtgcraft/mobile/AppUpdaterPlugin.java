@@ -21,7 +21,7 @@ import java.util.*;
 /** Web updates and APK updates are separate: an OTA web bundle cannot replace Java plugins. */
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
-    static final int BUNDLED_WEB_CODE = 1008;
+    static final int BUNDLED_WEB_CODE = 1009;
     private static final String MANIFEST = "https://raw.githubusercontent.com/JishnuTheGamer/jtg-craft/main/mobile/mobile-update-check.json";
     private static final Set<String> WEB_FILES = new HashSet<>(Arrays.asList("index.html", "style.css", "mobile-patches.css", "mobile-bridge.js", "renderer.js"));
     private SharedPreferences prefs() { return getContext().getSharedPreferences("jtg_updates", Context.MODE_PRIVATE); }
@@ -191,7 +191,7 @@ public class AppUpdaterPlugin extends Plugin {
     private void download(String url, File target, String expected, long maximum) throws Exception {
         if (expected != null && !expected.matches("[a-f0-9]{64}")) throw new IOException("Missing update checksum.");
         HttpURLConnection connection = (HttpURLConnection)new URL(url).openConnection();
-        connection.setConnectTimeout(25000); connection.setReadTimeout(90000); connection.setRequestProperty("User-Agent", "JtgCraft/1.0.8");
+        connection.setConnectTimeout(25000); connection.setReadTimeout(90000); connection.setRequestProperty("User-Agent", "JtgCraft/1.0.9");
         try {
             if (connection.getResponseCode() != 200) throw new IOException("HTTP " + connection.getResponseCode());
             try (InputStream in = connection.getInputStream(); OutputStream out = new FileOutputStream(target)) {

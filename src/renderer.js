@@ -1,4 +1,30 @@
 /* JTG_SHARED_UI_START */
+(() => {
+function requiredJava(version) {
+    const match = String(version || '').match(/(?:^|[^\d])(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    if (!match) return 21;
+    const [, major, minor, patch = '0'] = match.map(String);
+    if (+major >= 26) return 25;
+    if (+major === 1 && (+minor >= 21 || (+minor === 20 && +patch >= 5))) return 21;
+    return 17;
+}
+function targetJava(setting, version) {
+    const minimum = requiredJava(version);
+    const target = !setting || setting === 'auto' ? minimum : Number(setting);
+    if (![17, 21, 25].includes(target)) throw new Error('Choose Auto, Java 17, 21 or 25.');
+    // Manual runtimes are explicit overrides; Minecraft/plugins decide compatibility.
+    return target;
+}
+function resourceLimits(totalRamMB, cores) {
+    const total = Math.max(512, Math.floor(Number(totalRamMB) || 2048));
+    const reserve = Math.min(2048, Math.max(512, Math.floor(total / 4)));
+    const maxRamMB = Math.max(512, Math.floor((total - reserve) / 256) * 256);
+    const maxCpuCores = Math.max(1, Math.floor(Number(cores) || 1));
+    return { totalRamMB: total, reservedRamMB: reserve, maxRamMB, maxCpuCores, recommendedRamMB: Math.min(2048, maxRamMB), recommendedCpuCores: Math.max(1, Math.floor(maxCpuCores / 2)) };
+}
+window.JtgJavaPolicy = { requiredJava, targetJava }; window.JtgResourcePolicy = { resourceLimits };
+
+})();
 /* Shared JTG Craft interface. Synced into both renderers by tools/sync-ui.cjs. */
 (() => {
     'use strict';
@@ -15,6 +41,59 @@
     let logState;
     let propertyFilter = 'all';
     let propertyBaseline = {};
+    let activeOperation = false;
+    function operationProgress(percent, status) {
+        if (!activeOperation) return;
+        const known = percent != null && Number.isFinite(Number(percent));
+        const pct = known ? Math.max(0, Math.min(100, Math.round(Number(percent)))) : 0;
+        const bar = document.querySelector('#operation-bar');
+        bar.style.width = known ? pct + '%' : '35%'; bar.classList.toggle('indeterminate', !known);
+        document.querySelector('#operation-percent').textContent = known ? `${pct}% complete · ${100-pct}% remaining` : 'Working…';
+        if (status) document.querySelector('#operation-status').textContent = status;
+    }
+    async function runOperation(title, task) {
+        if (activeOperation) throw new Error('Wait for the current operation to finish.');
+        let dialog = document.querySelector('#operation-dialog');
+        if (!dialog) {
+            dialog = document.createElement('div'); dialog.id = 'operation-dialog'; dialog.className = 'operation-overlay hidden';
+            dialog.innerHTML = '<section class="operation-card" role="dialog" aria-modal="true" aria-labelledby="operation-title" tabindex="-1"><span class="ui-eyebrow">JTG CRAFT</span><h2 id="operation-title"></h2><p id="operation-status" role="status"></p><div class="progress-track"><div id="operation-bar" class="progress-fill"></div></div><p id="operation-percent"></p><button id="operation-close" class="btn secondary">Close</button></section>';
+            document.body.appendChild(dialog);
+            dialog.querySelector('#operation-close').onclick = () => { if (!activeOperation) dialog.classList.add('hidden'); };
+            dialog.onkeydown = event => { if (event.key === 'Escape' && !activeOperation) dialog.classList.add('hidden'); if (event.key === 'Tab') { event.preventDefault(); (activeOperation ? dialog.querySelector('.operation-card') : dialog.querySelector('#operation-close')).focus(); } };
+        }
+        dialog.classList.remove('hidden','failed'); activeOperation = true;
+        dialog.querySelector('#operation-title').textContent = title; dialog.querySelector('#operation-close').disabled = true;
+        dialog.querySelector('.operation-card').focus(); operationProgress(null,'Preparing…');
+        const buttons = [...document.querySelectorAll('#panel-settings button')].filter(button => !button.disabled);
+        buttons.forEach(button => button.disabled = true);
+        try { const result = await task(); if (result && result.success === false) throw new Error(result.error || 'Operation failed.'); operationProgress(100,'Completed successfully.'); return result; }
+        catch (error) { dialog.classList.add('failed'); dialog.querySelector('#operation-status').textContent = error.message || String(error); dialog.querySelector('#operation-percent').textContent = 'Operation failed'; dialog.querySelector('#operation-bar').classList.remove('indeterminate'); throw error; }
+        finally { activeOperation = false; buttons.forEach(button => button.disabled = false); dialog.querySelector('#operation-close').disabled = false; dialog.querySelector('#operation-close').focus(); }
+    }
+    async function loadResources() {
+        if (!window.api.getServerConfig) return;
+        const [info,cfg] = await Promise.all([window.api.getSystemInfo(),window.api.getServerConfig()]);
+        const limits = window.JtgResourcePolicy.resourceLimits(info.totalRamMB,info.cores);
+        const ram = document.querySelector('#settings-sld-ram'), cpu = document.querySelector('#settings-sld-cpu');
+        if (!ram || !cpu) return;
+        ram.min = 512; ram.max = info.maxRamMB || limits.maxRamMB; ram.value = Math.min(+ram.max,Math.max(512,cfg.ramMB || cfg.ram || limits.recommendedRamMB));
+        cpu.max = info.maxCpuCores || limits.maxCpuCores; cpu.value = Math.min(+cpu.max,Math.max(1,cfg.cpuCores || cfg.cpu || limits.recommendedCpuCores));
+        document.querySelector('#settings-inp-name').value = cfg.name || '';
+        document.querySelector('#settings-inp-path').value = cfg.path || '';
+        const versionSelect = document.querySelector('#settings-version-select');
+        if (versionSelect && [...versionSelect.options].some(option => option.value === cfg.version)) versionSelect.value = cfg.version;
+        document.querySelector('#settings-lbl-ram-max').textContent = (+ram.max / 1024).toFixed(2) + ' GB';
+        document.querySelector('#settings-lbl-cpu-max').textContent = cpu.max;
+        const refresh = () => { document.querySelector('#settings-lbl-ram').textContent = ram.value; document.querySelector('#settings-lbl-cpu').textContent = cpu.value; };
+        ram.oninput = cpu.oninput = refresh; refresh();
+        document.querySelector('#btn-settings-save-config').onclick = async () => {
+            try { const name = document.querySelector('#settings-inp-name').value.trim(); if (!name) throw new Error('Enter a server name.');
+                await runOperation('Saving server configuration',()=>window.api.saveServerConfig({name,ram:+ram.value,cpu:+cpu.value}));
+                document.querySelectorAll('#sidebar-server-name,#drawer-server-name').forEach(el=>el.textContent=name);
+                notify('Saved. Restart your server to apply resource changes.');
+            } catch (error) { notify(error.message); }
+        };
+    }
     function applyTheme(id) {
         const theme = themes.find(t => t[0] === id) || themes[0];
         document.documentElement.dataset.theme = theme[0];
@@ -46,6 +125,11 @@
     }
     function init() {
         const settings = document.querySelector('#panel-settings .settings-grid');
+        if (settings && !document.querySelector('#settings-sld-ram')) {
+            const card = document.createElement('section'); card.className = 'settings-card server-config-card';
+            card.innerHTML = '<div class="sc-content"><h3>Server configuration</h3><label>Server name<input id="settings-inp-name" class="prop-input" maxlength="32"></label><label>RAM: <strong id="settings-lbl-ram"></strong> MB<input id="settings-sld-ram" type="range" min="512" step="256"></label><div class="range-labels"><span>512 MB</span><span id="settings-lbl-ram-max"></span></div><label>CPU cores: <strong id="settings-lbl-cpu"></strong><input id="settings-sld-cpu" type="range" min="1" step="1"></label><div class="range-labels"><span>1</span><span id="settings-lbl-cpu-max"></span></div><label>Server folder<input id="settings-inp-path" class="prop-input" readonly></label><button id="btn-settings-save-config" class="btn primary">Save Configuration</button></div>';
+            settings.prepend(card);
+        }
         if (settings) {
             const card = document.createElement('section');
             card.className = 'settings-card appearance-card';
@@ -346,7 +430,7 @@
         const badge = document.querySelector('#ui-process-state');
         if (badge) { badge.textContent = running ? 'Process running' : 'Server stopped'; badge.classList.toggle('running', running); }
     }
-    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState };
+    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState, runOperation, operationProgress, loadResources };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();
 })();
@@ -404,12 +488,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── System info for sliders ─────────────────────────────
     const sysInfo = await window.api.getSystemInfo();
-    const ramMax = Math.max(2048, sysInfo.totalRamMB - 2048); // leave 2GB for OS
+    const ramMax = sysInfo.maxRamMB || window.JtgResourcePolicy.resourceLimits(sysInfo.totalRamMB,sysInfo.cores).maxRamMB;
     const cpuMax = sysInfo.cores;
 
     const sldRam = $('#sld-ram');
     const sldCpu = $('#sld-cpu');
-    sldRam.max = ramMax;
+    sldRam.min = 512; sldRam.max = ramMax;
     sldRam.value = Math.min(2048, ramMax);
     sldCpu.max = cpuMax;
     sldCpu.value = Math.max(1, Math.floor(cpuMax / 2));
@@ -428,6 +512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Setup progress listener ─────────────────────────────
     window.api.onSetupProgress(data => {
+        window.JtgUI.operationProgress(data.percent,data.status);
         if (data.step === 'java') {
             $('#step-java-status').textContent = data.status;
             $('#setup-java-bar').style.width = data.percent + '%';
@@ -552,7 +637,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sel.innerHTML = '';
             paperVersions.forEach(v => {
                 const opt = document.createElement('option');
-                opt.value = v; opt.textContent = v;
+                opt.value = v; opt.textContent = `${v} · Auto: Java ${window.JtgJavaPolicy.requiredJava(v)}`;
                 sel.appendChild(opt);
             });
             sel.disabled = false;
@@ -1334,7 +1419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         try {
-            await window.api.propsSave(obj);
+            await window.JtgUI.runOperation('Saving server properties',()=>window.api.propsSave(obj));
             window.JtgUI.propertiesSaved();
             toast('Properties saved! Restart server to apply.');
         } catch (e) { toast(e.message, 'error'); }
@@ -1377,7 +1462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sel.innerHTML = '';
             (paperVersions || []).forEach(v => {
                 const opt = document.createElement('option');
-                opt.value = v; opt.textContent = v;
+                opt.value = v; opt.textContent = `${v} · Auto: Java ${window.JtgJavaPolicy.requiredJava(v)}`;
                 sel.appendChild(opt);
             });
         }
@@ -1396,92 +1481,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (_) {}
 
+        await window.JtgUI.loadResources().catch(error => toast(error.message,'error'));
         // Load changelog
         loadChangelog();
     }
 
-    function showSettingsProgress(label) {
-        $('#settings-progress').classList.remove('hidden');
-        $('#settings-progress-bar').style.width = '0%';
-        $('#settings-progress-label').textContent = label;
-    }
-
-    // Reuse the same download event
-    window.api.onDownloadProgress(pct => {
-        const bar = $('#settings-progress-bar');
-        if (bar) {
-            bar.style.width = pct + '%';
-            $('#settings-progress-label').textContent = `Downloading... ${pct}%`;
-        }
-    });
-
-    if (window.api.onJavaDownloadProgress) {
-        window.api.onJavaDownloadProgress(data => {
-            const bar = $('#settings-progress-bar');
-            const label = $('#settings-progress-label');
-            const wrap = $('#settings-progress');
-            if (wrap) wrap.classList.remove('hidden');
-            if (bar) bar.style.width = (data.percent || 0) + '%';
-            if (label) label.textContent = data.status || `Downloading Java ${data.version}...`;
-        });
-    }
-
-    $('#btn-settings-reinstall').onclick = async () => {
-        showSettingsProgress('Reinstalling server jar...');
-        try {
-            await window.api.serverReinstall();
-            toast('Reinstall complete!');
-        } catch (e) {
-            toast(e.message, 'error');
-        }
-        $('#settings-progress').classList.add('hidden');
+    window.api.onDownloadProgress(pct => window.JtgUI.operationProgress(pct,'Downloading…'));
+    if (window.api.onJavaDownloadProgress) window.api.onJavaDownloadProgress(data => window.JtgUI.operationProgress(data.percent,data.status));
+    const btnSettingsReinstall = $('#btn-settings-reinstall');
+    if (btnSettingsReinstall) btnSettingsReinstall.onclick = async () => {
+        try { await window.JtgUI.runOperation('Reinstalling server',()=>window.api.serverReinstall()); toast('Reinstall complete!'); }
+        catch (error) { toast(error.message,'error'); }
     };
-
-    $('#btn-settings-version').onclick = async () => {
-        const ver = $('#settings-version-select').value;
-        if (!ver) return;
-        if (!confirm(`Change server version to ${ver}? This will download the new jar.`)) return;
-        
-        showSettingsProgress(`Downloading version ${ver}...`);
-        try {
-            await window.api.serverChangeVersion(ver);
-            toast(`Version successfully changed to ${ver}`);
-            loadSettings(); // refresh java active status
-        } catch (e) {
-            toast(e.message, 'error');
-        }
-        $('#settings-progress').classList.add('hidden');
+    const btnSettingsVersion = $('#btn-settings-version');
+    if (btnSettingsVersion) btnSettingsVersion.onclick = async () => {
+        const version = $('#settings-version-select').value;
+        if (!version || !confirm(`Change server version to ${version}? This will download the new jar.`)) return;
+        try { await window.JtgUI.runOperation(`Installing Paper ${version}`,()=>window.api.serverChangeVersion(version)); await loadSettings(); toast(`Version changed to ${version}`); }
+        catch (error) { toast(error.message,'error'); }
     };
-
     const btnSettingsJava = $('#btn-settings-java');
-    if (btnSettingsJava) {
-        btnSettingsJava.onclick = async () => {
-            const sel = $('#settings-java-select');
-            const val = sel ? sel.value : 'auto';
-            btnSettingsJava.disabled = true;
-
-            showSettingsProgress(`Applying Java ${val === 'auto' ? 'Auto Mode' : val}...`);
-            try {
-                const res = await window.api.setJavaVersion(val);
-                const lblActive = $('#lbl-active-java');
-                if (lblActive && res) {
-                    const isAuto = res.configuredSetting === 'auto';
-                    lblActive.textContent = `Java ${res.activeVersion} ${isAuto ? '(Auto)' : '(Manual Override)'}`;
-                }
-                toast(`Java ${res.activeVersion} successfully configured! Restart server to apply.`);
-            } catch (e) {
-                toast(e.message || 'Failed to update Java version', 'error');
-            } finally {
-                $('#settings-progress').classList.add('hidden');
-                btnSettingsJava.disabled = false;
-            }
-        };
-    }
+    if (btnSettingsJava) btnSettingsJava.onclick = async () => {
+        const selection = $('#settings-java-select').value;
+        try { await window.JtgUI.runOperation('Applying Java '+selection,()=>window.api.setJavaVersion(selection)); await loadSettings(); toast('Java configured. Restart the server to apply.'); }
+        catch (error) { toast(error.message,'error'); }
+    };
 
     $('#btn-settings-delete').onclick = async () => {
         if (!confirm('Are you absolutely sure you want to DELETE this server and all its files? This CANNOT be undone!')) return;
         try {
-            await window.api.serverDelete();
+            await window.JtgUI.runOperation('Deleting server',()=>window.api.serverDelete());
             toast('Server deleted.');
             if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
             $('#sidebar-server-name').textContent = 'Server';

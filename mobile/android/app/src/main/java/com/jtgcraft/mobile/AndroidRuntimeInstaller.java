@@ -29,12 +29,21 @@ final class AndroidRuntimeInstaller {
                         try {
                             if (connection.getResponseCode() != 200) throw new IOException("Java download HTTP " + connection.getResponseCode());
                             try (InputStream input = connection.getInputStream(); OutputStream output = new FileOutputStream(archive)) {
-                                byte[] bytes = new byte[32768]; int count; long size = 0;
-                                while ((count = input.read(bytes)) != -1) { size += count; if (size > 80 * 1024 * 1024) throw new IOException("Java archive too large."); output.write(bytes, 0, count); }
+                                byte[] bytes = new byte[32768]; int count; long size = 0, last = 0;
+                                long total = connection.getContentLengthLong();
+                                while ((count = input.read(bytes)) != -1) {
+                                    size += count; if (size > 80 * 1024 * 1024) throw new IOException("Java archive too large."); output.write(bytes, 0, count);
+                                    if (listener != null && System.currentTimeMillis()-last > 250) {
+                                        last = System.currentTimeMillis();
+                                        int percent = total > 0 ? 5 + i * 40 + (int)Math.min(30, size * 30 / total) : 5 + i * 40;
+                                        listener.onProgress(percent, "Downloading Java " + version + " component " + (i+1) + "/2 (" + size/1024 + " KB)");
+                                    }
+                                }
                             }
                         } finally { connection.disconnect(); }
                     }
                     if (!AppUpdaterPlugin.hash(archive).equals(hashes[i])) throw new IOException("Java archive checksum mismatch.");
+                    if (listener != null) listener.onProgress(35+i*40, "Extracting Java " + version + " component " + (i+1) + "/2");
                     JavaManagerPlugin.extractArchive(archive, stage);
                 } catch (Exception error) { archive.delete(); throw error; }
             }

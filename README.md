@@ -6,7 +6,7 @@
 
 ### The Ultimate Minecraft Paper Server Manager for Windows & Android
 
-[![Release PC](https://img.shields.io/badge/PC_Release-v1.0.4-ef4444?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
+[![Release PC](https://img.shields.io/badge/PC_Release-v1.0.5-ef4444?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
 [![Mobile Edition](https://img.shields.io/badge/Mobile_Architecture-Android_6+-00E5FF?style=for-the-badge&logo=android&logoColor=white)](mobile/)
 [![Data Center](https://img.shields.io/badge/OTA_Update_Center-Active-9333EA?style=for-the-badge&logo=cloud&logoColor=white)](mobile/mobile-update-check.json)
 [![Minecraft](https://img.shields.io/badge/PaperMC-All_Versions-E67E22?style=for-the-badge&logo=minecraft&logoColor=white)](https://papermc.io/)

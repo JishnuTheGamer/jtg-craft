@@ -22,6 +22,6 @@ for (const name of ['update-check.json','mobile/mobile-update-check.json']) {
         assert.equal(sha(file),sha(packaged),'Packaged file: '+file);
     }
 }
-assert(fs.readFileSync('mobile/android/app/build.gradle','utf8').includes('versionCode 8'));
-assert.equal(JSON.parse(fs.readFileSync('package.json')).version,'1.0.4');
+assert(fs.readFileSync('mobile/android/app/build.gradle','utf8').includes('versionCode 9'));
+assert.equal(JSON.parse(fs.readFileSync('package.json')).version,'1.0.5');
 console.log('Release hashes, artifact sizes, canonical GitHub bytes, packaged desktop/Android assets and version metadata passed.');

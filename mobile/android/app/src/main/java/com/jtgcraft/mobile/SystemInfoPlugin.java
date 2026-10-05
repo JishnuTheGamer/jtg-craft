@@ -49,6 +49,13 @@ public class SystemInfoPlugin extends Plugin {
         });
     }
 
+    static ResourceLimits resources(Context context) {
+        ActivityManager manager = (ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+        if (manager != null) manager.getMemoryInfo(info);
+        return new ResourceLimits(info.totalMem / (1024*1024),Runtime.getRuntime().availableProcessors());
+    }
+
     @PluginMethod
     public void getSystemInfo(PluginCall call) {
         try {
@@ -69,6 +76,9 @@ public class SystemInfoPlugin extends Plugin {
             ret.put("cpuCores", Runtime.getRuntime().availableProcessors());
             ret.put("cores", Runtime.getRuntime().availableProcessors());
             ret.put("totalRamMB", totalMemMB);
+            ResourceLimits limits = resources(context);
+            ret.put("maxRamMB", limits.maxRamMB);
+            ret.put("maxCpuCores", limits.maxCpuCores);
             ret.put("freeMemMB", freeMemMB);
             ret.put("isLowMemory", memInfo.lowMemory);
 

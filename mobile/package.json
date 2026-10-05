@@ -1,6 +1,6 @@
 {
   "name": "jtg-craft-mobile",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Jtg-craft Mobile — Minecraft Server Manager for Android",
   "main": "index.js",
   "scripts": {

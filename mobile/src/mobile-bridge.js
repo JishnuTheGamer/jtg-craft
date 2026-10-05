@@ -405,7 +405,8 @@
     AppUpdater.addListener?.('update-progress', data => emitEvent('hot-update-progress', data));
 
     function getRecommendedJavaForMc(version) {
-        const m = String(version || '').match(/(?:^|[^\d])(\d+)\.(\d+)(?:\.(\d+))?/);
+        if (window.JtgJavaPolicy) return window.JtgJavaPolicy.requiredJava(version);
+        const m = String(version || '').match(/(?:^|[^\d])(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
         if (!m) return 21;
         if (+m[1] >= 26) return 25;
         return +m[1] === 1 && (+m[2] >= 21 || (+m[2] === 20 && +(m[3] || 0) >= 5)) ? 21 : 17;
@@ -451,6 +452,10 @@
                 return { found: false, version: '' };
             }
         },
+        checkJava25: async () => {
+            const result = await JavaManager.checkJava25();
+            return {found:!!result.installed,version:'25',portable:true,path:result.path || ''};
+        },
         installJava: async (opts) => {
             const ver = (typeof opts === 'object' && opts.version) ? opts.version : (typeof opts === 'string' && opts.match(/^\d+$/) ? opts : '17');
             if (JavaManager.installJava) {
@@ -475,8 +480,8 @@
         },
         getJavaSettings: async () => {
             try {
-                let setting = 'auto';
-                let sVer = '1.20.1';
+                let setting = null;
+                let sVer = '1.21.11';
                 try {
                     const cfg = await window.api.getServerConfig();
                     if (cfg) {
@@ -485,7 +490,7 @@
                     }
                 } catch (_) {}
 
-                if (!setting || setting === 'auto') {
+                if (!setting) {
                     if (JavaManager.getJavaSettings) {
                         const res = await JavaManager.getJavaSettings();
                         if (res && res.configuredSetting) setting = res.configuredSetting;
@@ -504,56 +509,19 @@
                     serverVersion: sVer
                 };
             } catch (e) {
-                return { setting: 'auto', configuredSetting: 'auto', activeVersion: '17', serverVersion: '1.20.1' };
+                throw new Error('Could not read Java configuration: ' + e.message);
             }
         },
         setJavaVersion: async (setting) => {
-            try {
-                const s = String(setting || 'auto');
-                const cfgBefore = await window.api.getServerConfig();
-                const minimum = getRecommendedJavaForMc(cfgBefore.version);
-                if (!['auto','17','21','25'].includes(s) || (s !== 'auto' && +s < minimum)) throw new Error('This Minecraft version needs Java ' + minimum + ' or newer. Select Auto.');
-                if (JavaManager.setJavaVersion) {
-                    await JavaManager.setJavaVersion({ setting: s });
-                }
-                try {
-                    if (ServerProcess.saveServerConfig) {
-                        await ServerProcess.saveServerConfig({ javaVersion: s });
-                    }
-                } catch (_) {}
-
-                // If user selected Java 21 or higher, check if installed; if not, download & install!
-                if (s === '25') {
-                    const chk = await JavaManager.checkJava25();
-                    if (!chk.installed) await window.api.installJava({version: '25'});
-                } else if (s === '21') {
-                    if (JavaManager.checkJava21) {
-                        const chk = await JavaManager.checkJava21();
-                        if (!chk || !chk.installed) {
-                            await window.api.installJava21();
-                        }
-                    }
-                }
-
-                let sVer = '1.20.1';
-                try {
-                    const cfg = await window.api.getServerConfig();
-                    if (cfg && cfg.version) sVer = cfg.version;
-                } catch (_) {}
-
-                const rec = getRecommendedJavaForMc(sVer);
-                const activeVersion = (s === 'auto') ? String(rec) : s;
-
-                return {
-                    success: true,
-                    setting: s,
-                    configuredSetting: s,
-                    activeVersion,
-                    serverVersion: sVer
-                };
-            } catch (e) {
-                return { success: false, error: e.message || 'Failed to configure Java version' };
-            }
+            const selected = String(setting || 'auto');
+            if (!['auto','17','21','25'].includes(selected)) throw new Error('Choose Auto, Java 17, 21 or 25.');
+            const cfg = await window.api.getServerConfig();
+            const version = selected === 'auto' ? getRecommendedJavaForMc(cfg.version) : +selected;
+            const check = version === 25 ? await JavaManager.checkJava25() : version === 21 ? await JavaManager.checkJava21() : await JavaManager.checkJava();
+            if (!check.installed) await window.api.installJava({version:String(version)});
+            if (JavaManager.setJavaVersion) await JavaManager.setJavaVersion({setting:selected});
+            await ServerProcess.saveServerConfig({javaVersion:selected});
+            return {success:true,configuredSetting:selected,activeVersion:String(version),serverVersion:cfg.version};
         },
 
         setInterfaceTheme: async (light) => {
@@ -564,7 +532,8 @@
                 if (SystemInfo.getSystemInfo) {
                     const res = await SystemInfo.getSystemInfo();
                     return {
-                        totalRamMB: res.totalMemMB || 4096,
+                        totalRamMB: res.totalRamMB || res.totalMemMB || 2048,
+                        maxRamMB: res.maxRamMB, maxCpuCores: res.maxCpuCores, freeMemMB: res.freeMemMB,
                         cores: res.cores || res.cpuCores || 4,
                         os: res.os || 'Android',
                         arch: res.arch || 'arm64-v8a'
@@ -774,7 +743,13 @@
             if (ServerProcess.reinstall) return ServerProcess.reinstall();
             return Promise.resolve({ success: true });
         },
-        serverChangeVersion: (ver) => {
+        serverChangeVersion: async (ver) => {
+            const config = await window.api.getServerConfig();
+            if (!config.javaVersion || config.javaVersion === 'auto') {
+                const java = getRecommendedJavaForMc(ver);
+                const installed = java === 25 ? await JavaManager.checkJava25() : java === 21 ? await JavaManager.checkJava21() : await JavaManager.checkJava();
+                if (!installed.installed) await window.api.installJava({version:String(java)});
+            }
             if (ServerProcess.changeVersion) return ServerProcess.changeVersion({ version: ver });
             return Promise.resolve({ success: true });
         },

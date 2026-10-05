@@ -3,12 +3,16 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
-const { requiredJava, targetJava } = require('../lib/java-policy.cjs');
+const { requiredJava, targetJava, resourceLimits } = require('../lib/java-policy.cjs');
 const { applyUpdate, prepareInstaller } = require('../lib/update-manager.cjs');
 (async () => {
     for (const [version, required] of [['1.20.4',17],['1.20.5',21],['1.21',21],['1.21.11',21],['26.1 (Tiny Takeover)',25],['paper-26.2-121.jar',25],['1.17.1',17]]) assert.equal(requiredJava(version),required);
-    assert.throws(() => targetJava('17','1.21.1'));
-    assert.throws(() => targetJava('21','26.2'));
+    assert.equal(targetJava('17','1.21.1'),17);
+    assert.equal(targetJava('21','26.2'),21);
+    assert.equal(targetJava('25','1.20.1'),25);
+    assert.throws(() => targetJava('99','26.2'));
+    assert.equal(requiredJava('26'),25);
+    for (const total of [2048,3072,4096,8192,16384]) { const limits=resourceLimits(total,8); assert(limits.maxRamMB < total); assert.equal(limits.maxCpuCores,8); }
     assert.equal(targetJava('auto','26.1'),25);
     const baseDir = path.resolve('ui-preview/update-test');
     await fs.mkdir(path.join(baseDir,'src'),{recursive:true});
@@ -34,5 +38,5 @@ const { applyUpdate, prepareInstaller } = require('../lib/update-manager.cjs');
     assert.equal(await fs.readFile(downloaded,'utf8'),'installer fixture');
     await assert.rejects(prepareInstaller({directory:baseDir,update:binaryUpdate,request:async()=>({headers:{},data:Readable.from([Buffer.from('corrupt')])})}),/Checksum|checksum/);
     assert.equal(await fs.readFile(downloaded,'utf8'),'installer fixture');
-    console.log('Java requirements, incompatible overrides, update checksums, path validation, successful activation and write-failure rollback passed.');
+    console.log('Auto Java policy, manual overrides, real hardware limits, update checksums and failure rollback passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

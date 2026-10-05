@@ -6,7 +6,11 @@ for (const [source, targets] of [
     ['ui/design.js', ['src/renderer.js', 'mobile/www/renderer.js']],
     ['ui/design.css', ['src/style.css', 'mobile/src/mobile-patches.css']],
 ]) {
-    const code = fs.readFileSync(path.join(root, source), 'utf8').trim();
+    let code = fs.readFileSync(path.join(root, source), 'utf8').trim();
+    if (source.endsWith('.js')) {
+        const javaPolicy = fs.readFileSync(path.join(root,'lib/java-policy.cjs'),'utf8').replace(/module\.exports[^\n]*/, 'window.JtgJavaPolicy = { requiredJava, targetJava }; window.JtgResourcePolicy = { resourceLimits };');
+        code = '(() => {\n' + javaPolicy + '\n})();\n' + code;
+    }
     const start = '/* JTG_SHARED_UI_START */';
     const end = '/* JTG_SHARED_UI_END */';
     const region = new RegExp('/\\* JTG_SHARED_UI_START \\*/[\\s\\S]*?/\\* JTG_SHARED_UI_END \\*/\\s*', 'g');

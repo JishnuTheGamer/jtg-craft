@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('api', {
     getJavaSettings: () => ipcRenderer.invoke('get-java-settings'),
     getInstalledUpdateInfo: () => ipcRenderer.invoke('get-installed-update-info'),
     setJavaVersion: (setting) => ipcRenderer.invoke('set-java-version', setting),
+    getServerConfig: () => ipcRenderer.invoke('get-server-config'),
+    saveServerConfig: (config) => ipcRenderer.invoke('save-server-config',config),
     getSystemInfo:  () => ipcRenderer.invoke('get-system-info'),
     getLiveStats:   () => ipcRenderer.invoke('get-live-stats'),
     checkDiskSpace: (dir) => ipcRenderer.invoke('check-disk-space', dir),

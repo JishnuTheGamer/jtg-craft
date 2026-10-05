@@ -14,10 +14,15 @@ git add -- .gitattributes .gitignore README.md RELEASE-NOTES.md lib tools ui mai
 if ($LASTEXITCODE -ne 0) { throw 'Could not stage release sources.' }
 git diff --cached --quiet
 if ($LASTEXITCODE -eq 1) {
-    git commit -m 'fix: preserve original V1 release download links and filenames'
+    git commit -m 'fix: Java selection, Android hosting, resources and settings progress'
     if ($LASTEXITCODE -ne 0) { throw 'Could not commit sources.' }
 }
-git push origin 'HEAD:refs/heads/codex/release-v1.0.4'
+$sourceTag = (Get-Content -LiteralPath update-check.json -Raw | ConvertFrom-Json).sourceRef
+git push origin "HEAD:refs/heads/codex/release-$sourceTag"
+if ($LASTEXITCODE -ne 0) { throw 'Source branch push failed.' }
+git rev-parse --quiet --verify "refs/tags/$sourceTag" | Out-Null
+if ($LASTEXITCODE -ne 0) { git tag $sourceTag; if ($LASTEXITCODE -ne 0) { throw 'Source tag creation failed.' } }
+git push origin "refs/tags/$sourceTag"
 if ($LASTEXITCODE -ne 0) { throw 'Could not publish release source branch.' }
 
 $releaseTag = 'jtgcraft_v1'

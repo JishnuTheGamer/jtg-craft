@@ -1705,4 +1705,9 @@ input:disabled { opacity:.55; }
     .log-footer span:last-child { display:none; }
     #console-log { min-height:60px !important; }
 }
+.operation-overlay{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:20px;background:#000a;backdrop-filter:blur(6px)}
+.operation-card{width:min(460px,100%);padding:28px;border:1px solid var(--border);border-radius:18px;background:var(--bg-2,#151518);box-shadow:0 24px 90px #0008;outline:none}
+.operation-card h2{font-size:21px;margin:8px 0 18px}.operation-card p{font-size:13px;line-height:1.6;overflow-wrap:anywhere}.operation-card .btn{width:100%;margin-top:18px}.operation-overlay.failed #operation-status{color:var(--red-400,#e75b65)}
+.operation-card .indeterminate{animation:operation-sweep 1.4s ease-in-out infinite}@keyframes operation-sweep{0%,100%{transform:translateX(0)}50%{transform:translateX(180%)}}
+.server-config-card label{display:block;margin:14px 0 6px;font-size:13px}.server-config-card .prop-input{margin-top:6px;width:100%}.server-config-card input[type=range]{width:100%;margin:8px 0}.server-config-card .btn{margin-top:16px}
 /* JTG_SHARED_UI_END */

@@ -7,6 +7,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -26,7 +28,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-@CapacitorPlugin(name = "FileManager")
+@CapacitorPlugin(name = "FileManager", permissions = {
+    @Permission(alias="storage", strings={Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
+})
 public class FileManagerPlugin extends Plugin {
 
     private static final String PROTECTED_FILE = ".mcmeta.json";
@@ -74,7 +78,20 @@ public class FileManagerPlugin extends Plugin {
             hasPermission = (read == PackageManager.PERMISSION_GRANTED && write == PackageManager.PERMISSION_GRANTED);
         }
 
-        ret.put("granted", hasPermission);
+        boolean writable = false;
+        if (hasPermission) {
+            try {
+                File dir = ServerProcessPlugin.getPreferredStorageRoot(getContext());
+                if (dir.isDirectory() || dir.mkdirs()) {
+                    File probe = File.createTempFile(".jtg-permission-", ".tmp", dir);
+                    try (FileOutputStream out = new FileOutputStream(probe)) { out.write(1); }
+                    writable = true; probe.delete();
+                }
+            } catch (Exception ignored) {}
+        }
+        ret.put("phoneWritable", writable);
+        ret.put("granted", hasPermission && writable);
+        ret.put("message", writable ? "Phone Storage is ready." : "Allow storage access, then return to JTG Craft.");
         ret.put("isAllFilesAccess", isAllFiles);
         ret.put("sdkInt", Build.VERSION.SDK_INT);
         call.resolve(ret);
@@ -108,15 +125,12 @@ public class FileManagerPlugin extends Plugin {
                 }
             }
         } else {
-            ActivityCompat.requestPermissions(act, new String[]{
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            }, 101);
-            JSObject ret = new JSObject();
-            ret.put("requested", true);
-            call.resolve(ret);
+            requestPermissionForAlias("storage", call, "storagePermissionResult");
         }
     }
+
+    @PermissionCallback
+    private void storagePermissionResult(PluginCall call) { checkStoragePermission(call); }
 
     @PluginMethod
     public void getDefaultStoragePaths(PluginCall call) {
