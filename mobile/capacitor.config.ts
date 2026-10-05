@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   android: {
     minWebViewVersion: '55.0.2883.91', // Chrome 55+ for Android 6+
     allowMixedContent: true,
-    backgroundColor: '#0a0e1a',
+    backgroundColor: '#09090b',
     buildOptions: {
       signingType: 'apksigner'
     }
@@ -19,7 +19,7 @@ const config: CapacitorConfig = {
   plugins: {
     LocalNotifications: {
       smallIcon: 'ic_stat_server',
-      iconColor: '#00e5ff'
+      iconColor: '#d73c47'
     }
   }
 };

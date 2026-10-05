@@ -1,9 +1,10 @@
 {
   "name": "jtg-craft-mobile",
-  "version": "1.0.0",
+  "version": "1.0.8",
   "description": "Jtg-craft Mobile — Minecraft Server Manager for Android",
   "main": "index.js",
   "scripts": {
+    "prebuild": "node ../tools/sync-ui.cjs",
     "build": "npx cap sync android",
     "open": "npx cap open android",
     "run": "npx cap run android"

@@ -1,17 +1,33 @@
 {
-  "version": "1.0.3",
-  "versionCode": 103,
-  "releaseDate": "2026-09-07",
-  "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases",
+  "version": "1.0.4",
+  "versionCode": 104,
+  "releaseDate": "2026-10-05",
+  "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/v1.0.4/Jtg-craft-Setup-1.0.4.exe",
   "files": [
+    "lib/java-policy.cjs",
+    "lib/update-manager.cjs",
+    "lib/zip-runtime.cjs",
     "src/index.html",
     "src/style.css",
     "src/renderer.js",
-    "main.js",
+    "src/splash.html",
     "preload.js",
+    "main.js",
     "update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.4",
+      "versionCode": 104,
+      "date": "2026-10-05",
+      "type": "patch",
+      "title": "Premium interface, reliable updates and Java runtime selection",
+      "changes": [
+        "Shared black/crimson interface, eight saved themes, searchable logs and grouped server properties.",
+        "Exact Java 17/21/25 selection; missing runtimes are installed without substituting an incompatible Java.",
+        "Verified, staged desktop hot updates with rollback on failure and safe shutdown before relaunch."
+      ]
+    },
     {
       "version": "1.0.3",
       "versionCode": 103,
@@ -72,5 +88,24 @@
         "Premium dark glassmorphism theme with smooth micro-animations"
       ]
     }
-  ]
+  ],
+  "sourceRef": "v1.0.4",
+  "minimumBinaryVersion": "1.0.0",
+  "sha256": {
+    "lib/java-policy.cjs": "9117f040c25ab95e1ce9e1df369d75c84ef6c948cfa297a2d30446b36978c013",
+    "lib/update-manager.cjs": "efa50f5b87b0bb625642466a58b7ef8616f0861b347eab53c9918ef234ea1104",
+    "lib/zip-runtime.cjs": "f937e476abeaf338f345a48d23ce733dd836823530a0ee0a2eef44ca0d3f2521",
+    "src/index.html": "06f24fba09a7cd0a8fde42aef980d7614551e1090c75ac09928810c74dd841f3",
+    "src/style.css": "0627ff2811d965094c500945638d76d4143065bdada2b4d5b60048090684ad56",
+    "src/renderer.js": "52be43d788f1a62217c9f9009971a6e02841fdd2f840cb2f9ed0da768552faf5",
+    "src/splash.html": "23b618576f1263b9de0ab4eb3fea08f42289cba78bbe3169a1db1b5b1729fd46",
+    "preload.js": "e4dc61971cb1d331648bf8beec05603227605a07bf1ff8e6f66e42fb3e0dc70b",
+    "main.js": "2442c2296b6ae7c481502627a905e5ef0acbf13bb76e941e31236885421d78db"
+  },
+  "nativeUpdate": {
+    "version": "1.0.4",
+    "url": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/v1.0.4/Jtg-craft-Setup-1.0.4.exe",
+    "sha256": "23b71ae70087b2171a34edf72be29296721b9ea46dff315d326d4abe4f596fc3",
+    "size": 86323723
+  }
 }

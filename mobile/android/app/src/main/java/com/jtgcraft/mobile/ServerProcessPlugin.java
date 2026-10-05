@@ -23,7 +23,8 @@ public class ServerProcessPlugin extends Plugin {
 
     private static Process serverProcess = null;
     private static BufferedWriter processInput = null;
-    private static boolean isRunning = false;
+    private static volatile boolean isRunning = false;
+    private static volatile boolean isStarting = false;
     private static long startTime = 0;
 
     public static final String PREFS_NAME = "jtg_server_prefs";
@@ -121,8 +122,8 @@ public class ServerProcessPlugin extends Plugin {
         if (configured != null && !configured.trim().isEmpty() && !"auto".equalsIgnoreCase(configured.trim())) {
             try {
                 int parsed = Integer.parseInt(configured.trim());
-                if (parsed > 0) return parsed;
-            } catch (Exception ignored) {}
+                if (parsed > 0) return JavaVersionPolicy.target(parsed, getServerMcVersion());
+            } catch (NumberFormatException ignored) {}
         }
 
         String mcVersion = getServerMcVersion();
@@ -136,9 +137,7 @@ public class ServerProcessPlugin extends Plugin {
 
     /** Returns the path to java binary for the requested JDK major version */
     private File getJavaBinaryForVersion(int javaVersion) {
-        File root = (javaVersion >= 21)
-            ? new File(getContext().getFilesDir(), "java21")
-            : new File(getContext().getFilesDir(), "java");
+        File root = new File(getContext().getFilesDir(), javaVersion >= 21 ? "java" + javaVersion : "java");
 
         File direct = new File(root, "bin/java");
         if (direct.exists()) return direct;
@@ -157,19 +156,7 @@ public class ServerProcessPlugin extends Plugin {
      * Returns the minimum required Java major version for a given Minecraft version.
      * MC 1.21+ requires Java 21. MC 1.18-1.20.x requires Java 17. Older requires Java 8+.
      */
-    static int getRequiredJavaVersion(String mcVersion) {
-        if (mcVersion == null || mcVersion.isEmpty()) return 17;
-        try {
-            String[] parts = mcVersion.split("\\.");
-            int major = Integer.parseInt(parts[0]);
-            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
-            if (major > 1) return 21;
-            if (minor >= 21) return 21;
-            if (minor >= 18) return 17;
-            if (minor >= 17) return 16;
-        } catch (Exception ignored) {}
-        return 17;
-    }
+    static int getRequiredJavaVersion(String mcVersion) { return JavaVersionPolicy.required(mcVersion); }
 
     /** Reads the MC version from server metadata */
     private String getServerMcVersion() {
@@ -330,6 +317,11 @@ public class ServerProcessPlugin extends Plugin {
      */
     private String getPaperDirectUrl(String version) {
         switch (version) {
+            case "26.2":
+                return "https://fill-data.papermc.io/v1/objects/0de30efb024bc8b83c9c7d507d11802897ad8056b6110ec09fe1a91d126ccb54/paper-26.2-121.jar";
+            case "26.1":
+            case "26.1.2":
+                return "https://fill-data.papermc.io/v1/objects/1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7/paper-26.1.2-74.jar";
             case "1.21.11":
                 return "https://fill-data.papermc.io/v1/objects/e708e8c132dc143ffd73528cccb9532e2eb17628b1a0eee74469bf466c7003f8/paper-1.21.11-116.jar";
             case "1.21.10":
@@ -510,39 +502,14 @@ public class ServerProcessPlugin extends Plugin {
         int javaVer = getEffectiveJavaVersion();
         File javaBin = getJavaBinaryForVersion(javaVer);
 
-        // If target Java version is 21+ and not installed/executable, attempt auto-install
-        if (javaVer >= 21 && (!javaBin.exists() || !javaBin.canExecute())) {
-            JSObject dlMsg = new JSObject();
-            dlMsg.put("text", "[JAVA SETUP] Java 21 ARM64 runtime not found. Automatically downloading & installing Java 21...\n");
-            notifyListeners("console-data", dlMsg);
-            try {
-                boolean ok = JavaManagerPlugin.installJava21Sync(getContext(), (pct, status) -> {
-                    JSObject pMsg = new JSObject();
-                    pMsg.put("text", "[JAVA SETUP] " + status + " (" + pct + "%)\n");
-                    notifyListeners("console-data", pMsg);
-                });
-                if (ok) {
-                    javaBin = getJavaBinaryForVersion(javaVer);
-                }
-            } catch (Throwable t) {
-                JSObject errMsg = new JSObject();
-                errMsg.put("text", "[JAVA ERROR] Auto-install failed: " + t.getMessage() + "\n");
-                notifyListeners("console-data", errMsg);
-            }
+        JavaVersionPolicy.target(javaVer, getServerMcVersion());
+        if (javaVer >= 21) {
+            AndroidRuntimeInstaller.install(getContext(), javaVer, (pct, status) -> {
+                JSObject message = new JSObject(); message.put("text", "[JAVA SETUP] " + status + " (" + pct + "%)\n"); notifyListeners("console-data", message);
+            });
+            javaBin = getJavaBinaryForVersion(javaVer);
         }
-
-        if (!javaBin.exists()) {
-            File fallback17 = getJavaBinaryForVersion(17);
-            if (fallback17.exists() && (fallback17.canExecute() || fallback17.setExecutable(true, false))) {
-                javaBin = fallback17;
-                javaVer = 17;
-                JSObject warn = new JSObject();
-                warn.put("text", "[WARN] Using installed Java 17 runtime fallback.\n");
-                notifyListeners("console-data", warn);
-            } else {
-                throw new FileNotFoundException("Java " + javaVer + " runtime not found! Please run setup first.");
-            }
-        }
+        if (!javaBin.exists()) throw new FileNotFoundException("Java " + javaVer + " runtime is missing. Complete setup and retry.");
 
         File paperJar = new File(sdir, "paper.jar");
         if (!paperJar.exists()) {
@@ -592,6 +559,9 @@ public class ServerProcessPlugin extends Plugin {
         if (!tmpDir.exists()) tmpDir.mkdirs();
 
         File tagFix = ensureTagFixLibrary(getContext());
+        if (tagFix == null) {
+            throw new IOException("Java compatibility library is missing. Reinstall the latest Jtg-craft Mobile APK.");
+        }
         File jnaLib = ensureJnaLibrary(getContext(), javaHome);
 
         String nativeAppDir = (getContext().getApplicationInfo() != null && getContext().getApplicationInfo().nativeLibraryDir != null)
@@ -640,6 +610,7 @@ public class ServerProcessPlugin extends Plugin {
                 paperJar.getAbsolutePath(),
                 "--nogui"
         );
+        if (javaVer >= 25) pb.command().remove("-noverify");
         pb.directory(sdir);
         pb.redirectErrorStream(true);
 
@@ -670,6 +641,7 @@ public class ServerProcessPlugin extends Plugin {
         serverProcess = pb.start();
         processInput = new BufferedWriter(new OutputStreamWriter(serverProcess.getOutputStream()));
         isRunning = true;
+        isStarting = false;
         startTime = System.currentTimeMillis();
 
         // Periodic auto-save thread: flushes world & player data to disk every 2 minutes
@@ -700,14 +672,17 @@ public class ServerProcessPlugin extends Plugin {
         stateObj.put("running", true);
         notifyListeners("server-state", stateObj);
 
-        // Display network join addresses
-        printNetworkJoinInfo();
-
         // Stream stdout/stderr line by line to UI
         BufferedReader reader = new BufferedReader(new InputStreamReader(serverProcess.getInputStream()));
         String line;
         boolean skippingOshiTrace = false;
+        boolean announcedOnline = false;
         while ((line = reader.readLine()) != null) {
+            // Paper's ready message comes after downloads and startup, not at process creation.
+            if (!announcedOnline && line.contains("Done (") && line.contains("For help,")) {
+                announcedOnline = true;
+                printNetworkJoinInfo();
+            }
             // Filter cosmetic Android linker, OSHI diagnostic, and spark profiler fallback warnings
             if (line.contains("Failed to get system info for Microarchitecture") ||
                 line.contains("Did not find udev library") ||
@@ -746,7 +721,7 @@ public class ServerProcessPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
-        if (isRunning) {
+        if (isRunning || isStarting) {
             JSObject res = new JSObject();
             res.put("success", true);
             res.put("message", "Server already running");
@@ -754,6 +729,7 @@ public class ServerProcessPlugin extends Plugin {
             return;
         }
 
+        isStarting = true;
         new Thread(() -> {
             try {
                 launchServerProcess();
@@ -763,6 +739,7 @@ public class ServerProcessPlugin extends Plugin {
                 notifyListeners("console-data", consoleData);
             } finally {
                 isRunning = false;
+                isStarting = false;
                 serverProcess = null;
                 processInput = null;
 
@@ -830,6 +807,7 @@ public class ServerProcessPlugin extends Plugin {
                 Thread.sleep(500);
 
                 // 3. Launch server fresh
+                isStarting = true;
                 launchServerProcess();
 
             } catch (Exception e) {
@@ -855,6 +833,25 @@ public class ServerProcessPlugin extends Plugin {
         JSObject res = new JSObject();
         res.put("success", true);
         call.resolve(res);
+    }
+
+    @PluginMethod
+    public void prepareForUpdate(PluginCall call) {
+        new Thread(() -> {
+            try {
+                if (isStarting) throw new IOException("Server startup is in progress. Wait for it to finish before activating an update.");
+                Process running = serverProcess;
+                if (running != null && processInput != null) {
+                    processInput.write("save-all\nstop\n");
+                    processInput.flush();
+                    if (!running.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) {
+                        call.reject("Server is still saving. App update was postponed; retry after the server stops.");
+                        return;
+                    }
+                }
+                JSObject result = new JSObject(); result.put("success", true); call.resolve(result);
+            } catch (Exception e) { call.reject("Could not safely stop the server: " + e.getMessage()); }
+        }).start();
     }
 
     @PluginMethod
@@ -1290,13 +1287,12 @@ public class ServerProcessPlugin extends Plugin {
 
         try {
             File dest = new File(ctx.getFilesDir(), "libtagfix.so");
-            if (!dest.exists() || dest.length() < 1000) {
-                try (InputStream in = ctx.getAssets().open("libtagfix.so");
-                     OutputStream out = new FileOutputStream(dest)) {
-                    byte[] buf = new byte[8192];
-                    int len;
-                    while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
-                }
+            // Refresh on every launch: APK updates must replace the old Android 12-only fix.
+            try (InputStream in = ctx.getAssets().open("libtagfix.so");
+                 OutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
             }
             if (dest.exists()) {
                 dest.setExecutable(true, false);

@@ -24,6 +24,32 @@ import java.util.Properties;
 public class SystemInfoPlugin extends Plugin {
 
     @PluginMethod
+    public void setInterfaceTheme(PluginCall call) {
+        final boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        if (getActivity() == null) {
+            call.resolve();
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            android.view.Window window = getActivity().getWindow();
+            int color = android.graphics.Color.parseColor(light ? "#f5f5f3" : "#09090b");
+            window.setStatusBarColor(color);
+            window.setNavigationBarColor(color);
+            int flags = window.getDecorView().getSystemUiVisibility();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags = light ? flags | android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                        : flags & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags = light ? flags | android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                        : flags & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            window.getDecorView().setSystemUiVisibility(flags);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
     public void getSystemInfo(PluginCall call) {
         try {
             Context context = getContext();

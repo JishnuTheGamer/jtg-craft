@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
     checkJava:      (dir) => ipcRenderer.invoke('check-java', dir),
     installJava:    (opts) => ipcRenderer.invoke('install-java', opts),
     getJavaSettings: () => ipcRenderer.invoke('get-java-settings'),
+    getInstalledUpdateInfo: () => ipcRenderer.invoke('get-installed-update-info'),
     setJavaVersion: (setting) => ipcRenderer.invoke('set-java-version', setting),
     getSystemInfo:  () => ipcRenderer.invoke('get-system-info'),
     getLiveStats:   () => ipcRenderer.invoke('get-live-stats'),

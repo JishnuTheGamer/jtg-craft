@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-platform="mobile">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0a0e1a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,6 +10,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        try {
+            var jtgTheme = localStorage.getItem('jtg-theme') || 'ember';
+            if (!['ember','ocean','amber','forest','violet','paper','sky','rose'].includes(jtgTheme)) jtgTheme = 'ember';
+            document.documentElement.dataset.theme = jtgTheme;
+            document.documentElement.dataset.appearance = ['paper','sky','rose'].includes(jtgTheme) ? 'light' : 'dark';
+        } catch (_) {}
+    </script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="mobile-patches.css">
 </head>
@@ -23,7 +31,7 @@
         <div class="mobile-splash-logo">
             <img src="assets/logo.png" alt="Jtg-Craft Logo" class="mobile-splash-logo-img">
         </div>
-        <div class="mobile-splash-tagline">Best Minecraft Server Manager</div>
+        <div class="mobile-splash-tagline">Your server. Your world.</div>
         <div class="mobile-splash-dots">
             <span></span>
             <span></span>
@@ -676,6 +684,7 @@
                         <!-- Changelog display -->
                         <div id="update-changelog-display" style="margin-bottom: 8px;"></div>
 
+                        <label style="display:flex;align-items:center;gap:10px;margin:14px 0;font-size:13px;"><input id="auto-download-updates" type="checkbox" checked> Download updates automatically</label>
                         <!-- Actions -->
                         <div class="update-card-actions">
                             <button id="btn-check-updates" class="btn secondary">Check for Updates</button>
@@ -727,64 +736,11 @@
 
     </div>
 
-    <!-- Mobile Bottom Navigation Bar -->
-    <nav class="mobile-bottombar">
-        <ul class="sidebar-nav">
-            <li class="nav-item active" data-panel="panel-console">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span>
-                <span class="nav-label">Console</span>
-            </li>
-            <li class="nav-item" data-panel="panel-files">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
-                <span class="nav-label">Files</span>
-            </li>
-            <li class="nav-item" data-panel="panel-plugins">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg></span>
-                <span class="nav-label">Plugins</span>
-            </li>
-            <li class="nav-item" data-panel="panel-settings">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
-                <span class="nav-label">Settings</span>
-            </li>
-            <li class="nav-item nav-item-drawer" id="btn-bottom-menu">
-                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></span>
-                <span class="nav-label">Menu ☰</span>
-            </li>
-        </ul>
-    </nav>
+
 </section>
 
 <script src="mobile-bridge.js"></script>
-<script>
-    // OTA Hot-Patch Version Guard: Discards stale/broken patches from earlier tests
-    (function() {
-        try {
-            var bundledCode = 1006;
-            var otaCode = parseInt(localStorage.getItem('installed_ota_version_code') || '0', 10);
-            if (otaCode <= bundledCode) {
-                // Clear any old/corrupted patches so APK's fresh bundled assets take full precedence
-                Object.keys(localStorage).forEach(function(k) {
-                    if (k.indexOf('patch_') === 0) {
-                        localStorage.removeItem(k);
-                    }
-                });
-                localStorage.setItem('installed_ota_version_code', String(bundledCode));
-                localStorage.setItem('installed_ota_version', '1.0.6');
-            } else {
-                // Only load CSS patches if genuinely newer than bundled APK
-                ['mobile/www/style.css', 'mobile/www/mobile-patches.css'].forEach(function(p) {
-                    var c = localStorage.getItem('patch_' + p);
-                    if (c) {
-                        var s = document.createElement('style');
-                        s.setAttribute('data-hot-patch', p);
-                        s.textContent = c;
-                        document.head.appendChild(s);
-                    }
-                });
-            }
-        } catch (_) {}
-    })();
-</script>
+<!-- Verified OTA bundles are loaded by the native AppUpdater. -->
 <script src="renderer.js"></script>
 </body>
 </html>

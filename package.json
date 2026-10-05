@@ -1,10 +1,12 @@
 {
   "name": "jtg-craft",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Jtg-craft — Automated Minecraft Paper Server Manager",
   "main": "main.js",
   "scripts": {
+    "prestart": "node tools/sync-ui.cjs",
     "start": "electron .",
+    "prebuild": "node tools/sync-ui.cjs",
     "build": "electron-builder --win --x64"
   },
   "author": "Jishnu Tech",
@@ -58,7 +60,8 @@
       "assets/**/*",
       "node_modules/archiver-utils/**/*",
       "!node_modules/.cache",
-      "!**/*.map"
+      "!**/*.map",
+      "lib/**/*"
     ],
     "asar": false,
     "extraResources": []

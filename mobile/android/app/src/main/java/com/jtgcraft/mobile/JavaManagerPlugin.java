@@ -239,67 +239,19 @@ public class JavaManagerPlugin extends Plugin {
     }
 
     public static boolean installJava21Sync(Context ctx, JavaProgressListener listener) throws Exception {
-        File java21Dir = new File(ctx.getFilesDir(), "java21");
-        File existingBin = getJava21Binary(ctx);
-        if (existingBin != null && existingBin.exists() && (existingBin.canExecute() || existingBin.setExecutable(true, false))) {
-            if (listener != null) listener.onProgress(100, "Java 21 already installed");
-            return true;
-        }
-
-        // 1. Check local cached archive first
-        File cachedArchive = getPersistentArchive21(ctx);
-        if (cachedArchive != null) {
-            if (listener != null) listener.onProgress(50, "Extracting local Java 21 runtime...");
-            if (java21Dir.exists()) deleteRecursive(java21Dir);
-            java21Dir.mkdirs();
-            extractArchive(cachedArchive, java21Dir);
-            setExecutableRecursive(java21Dir);
-
-            File javaBin = getJava21Binary(ctx);
-            if (javaBin != null && javaBin.exists() && (javaBin.canExecute() || javaBin.setExecutable(true, false))) {
-                if (listener != null) listener.onProgress(100, "Java 21 ARM64 Installed");
-                return true;
-            }
-        }
-
-        // 2. Download Java 21 components from official PojavLauncher Gladiolus release
-        if (listener != null) listener.onProgress(5, "Connecting to Java 21 repository...");
-        URL finalUrl = resolveRedirects(POJAV_APK_URL);
-
-        File binArchive = new File(ctx.getFilesDir(), "jre21-bin.tar.xz");
-        File univArchive = new File(ctx.getFilesDir(), "jre21-univ.tar.xz");
-
-        try {
-            if (listener != null) listener.onProgress(10, "Downloading Java 21 Binaries (1/2)...");
-            downloadRangeInflatedInternal(finalUrl, POJAV_JRE21_BIN_OFFSET, POJAV_JRE21_BIN_SIZE, binArchive, "Downloading Java 21 Binaries (1/2)", 10, 25, listener);
-
-            if (listener != null) listener.onProgress(35, "Downloading Java 21 Libraries (2/2)...");
-            downloadRangeInflatedInternal(finalUrl, POJAV_JRE21_UNIV_OFFSET, POJAV_JRE21_UNIV_SIZE, univArchive, "Downloading Java 21 Libraries (2/2)", 35, 40, listener);
-
-            if (listener != null) listener.onProgress(80, "Extracting Java 21 runtime...");
-            if (java21Dir.exists()) deleteRecursive(java21Dir);
-            java21Dir.mkdirs();
-
-            extractArchive(binArchive, java21Dir);
-
-            if (listener != null) listener.onProgress(90, "Extracting Java 21 libraries...");
-            extractArchive(univArchive, java21Dir);
-
-            setExecutableRecursive(java21Dir);
-
-            File javaBin = getJava21Binary(ctx);
-            if (javaBin == null || !javaBin.exists()) {
-                throw new IOException("Java 21 binary not found after extraction");
-            }
-            javaBin.setExecutable(true, false);
-            javaBin.setReadable(true, false);
-
-            if (listener != null) listener.onProgress(100, "Java 21 ARM64 Installed");
-            return true;
-        } finally {
-            if (binArchive.exists()) binArchive.delete();
-            if (univArchive.exists()) univArchive.delete();
-        }
+        return AndroidRuntimeInstaller.install(ctx, 21, listener);
+    }
+    @PluginMethod public void checkJava25(PluginCall call) {
+        File bin = findJavaBinaryInDir(new File(getContext().getFilesDir(), "java25"));
+        JSObject result = new JSObject(); result.put("installed", bin.isFile() && bin.canExecute()); result.put("version", "25"); result.put("path", bin.getAbsolutePath()); call.resolve(result);
+    }
+    @PluginMethod public void installJava25(PluginCall call) {
+        new Thread(() -> {
+            try {
+                boolean ok = AndroidRuntimeInstaller.install(getContext(), 25, (pct, status) -> { JSObject event = new JSObject(); event.put("percent", pct); event.put("status", status); event.put("version", 25); notifyListeners("java-download-progress", event); });
+                JSObject result = new JSObject(); result.put("success", ok); result.put("version", "25"); call.resolve(result);
+            } catch (Exception e) { call.reject("Java 25 installation failed: " + e.getMessage()); }
+        }).start();
     }
 
     @PluginMethod
@@ -416,6 +368,8 @@ public class JavaManagerPlugin extends Plugin {
     @PluginMethod
     public void installJava(PluginCall call) {
         String version = call.getString("version", "17");
+        if ("25".equals(version)) { installJava25(call); return; }
+        if (!"17".equals(version) && !"21".equals(version)) { call.reject("Unsupported Java version: " + version); return; }
         if ("21".equals(version)) {
             installJava21(call);
             return;
@@ -658,11 +612,16 @@ public class JavaManagerPlugin extends Plugin {
                 if (name.isEmpty()) continue;
 
                 File destPath = new File(destDir, name);
+                String boundary = destDir.getCanonicalPath() + File.separator;
+                if (!destPath.getCanonicalPath().startsWith(boundary)) throw new IOException("Unsafe Java archive path: " + name);
                 if (entry.isDirectory()) {
                     destPath.mkdirs();
                 } else if (entry.isSymbolicLink()) {
                     File parent = destPath.getParentFile();
                     if (parent != null) parent.mkdirs();
+                    File link = new File(entry.getLinkTarget());
+                    if (!link.isAbsolute()) link = new File(parent, entry.getLinkTarget());
+                    if (!link.getCanonicalPath().startsWith(boundary)) throw new IOException("Unsafe Java archive symlink.");
                     try {
                         destPath.delete();
                         Os.symlink(entry.getLinkTarget(), destPath.getAbsolutePath());
@@ -672,6 +631,7 @@ public class JavaManagerPlugin extends Plugin {
                             if (!target.isAbsolute() && parent != null) {
                                 target = new File(parent, entry.getLinkTarget());
                             }
+                            if (!target.getCanonicalPath().startsWith(boundary)) throw new IOException("Unsafe Java archive symlink.");
                             if (target.exists()) copyFile(target, destPath);
                         } catch (Exception ignored) {}
                     }

@@ -6,7 +6,7 @@
 
 ### The Ultimate Minecraft Paper Server Manager for Windows & Android
 
-[![Release PC](https://img.shields.io/badge/PC_Release-v1.0.3-22c55e?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
+[![Release PC](https://img.shields.io/badge/PC_Release-v1.0.4-ef4444?style=for-the-badge&logo=github)](https://github.com/JishnuTheGamer/jtg-craft/releases)
 [![Mobile Edition](https://img.shields.io/badge/Mobile_Architecture-Android_6+-00E5FF?style=for-the-badge&logo=android&logoColor=white)](mobile/)
 [![Data Center](https://img.shields.io/badge/OTA_Update_Center-Active-9333EA?style=for-the-badge&logo=cloud&logoColor=white)](mobile/mobile-update-check.json)
 [![Minecraft](https://img.shields.io/badge/PaperMC-All_Versions-E67E22?style=for-the-badge&logo=minecraft&logoColor=white)](https://papermc.io/)
@@ -25,7 +25,7 @@ A powerful, all-in-one server application designed to create, configure, manage,
 
 ### ⚡ Instant Server Deployment
 - **1-Click Creation** — Select your desired PaperMC version and launch immediately.
-- **Support for Modern Updates** — Full compatibility with the latest releases, including **Minecraft 26.2 (Chaos Cubed)** and **Minecraft 26.1 (Tiny Takeover)**, as well as classic stable versions.
+- **Modern Version Catalog** — Includes **Minecraft 26.2** and **Minecraft 26.1.2**, as well as classic stable versions.
 - **Automatic Configuration** — Handles EULA agreements, directory structures, and default server properties automatically.
 
 ### 🧩 Built-in Plugin Marketplace
@@ -37,11 +37,12 @@ A powerful, all-in-one server application designed to create, configure, manage,
 - **Zero Configuration Required** — Jtg-Craft automatically detects and provisions the optimal Java runtime for your server version:
   - **Java 25** — Tailored for Minecraft 26.x
   - **Java 21** — Tailored for Minecraft 1.20.5 – 1.21.x
-  - **Java 17** — Tailored for Minecraft 1.18 – 1.20.4
+  - **Java 17** — Tailored for Minecraft 1.17 – 1.20.4
 - **Manual Control** — Switch between automatic detection and custom runtime versions anytime in the Server Settings panel.
 
 ### 💻 Real-Time Interactive Console
 - **Live Output Stream** — Monitor your server activity in real time with high-performance log rendering.
+- **Readable Logs** — Search messages, filter warnings and errors, pause live following, and copy or clear the console.
 - **Command Dispatch** — Run operator commands directly with dedicated command history and execution shortcuts.
 - **Process Controls** — Safe Start, Stop, and Restart controls designed to prevent world data corruption.
 
@@ -53,18 +54,18 @@ A powerful, all-in-one server application designed to create, configure, manage,
 ### 🌍 World & Player Controls
 - **World Management** — Track world disk usage, delete inactive worlds, or import custom worlds directly from `.zip` archives.
 - **Player Administration** — Manage player lists with one-click OP, Kick, Ban, and IP-ban capabilities, complete with player avatar previews.
-- **Visual Properties Editor** — Configure server settings like game mode, difficulty, max players, PvP, and view distance through modern dropdowns and toggles.
+- **Visual Properties Editor** — Search grouped settings with friendly labels, dropdowns, toggles, and numeric validation while preserving custom values.
 
 ### 💾 Automated Backups & System Stats
 - **One-Click Backups** — Generate full-server or world-only archives with real-time progress indicators.
 - **Resource Monitoring** — Keep track of real-time CPU usage and RAM allocation to ensure smooth server performance.
-- **Glassmorphism Dark Theme** — Modern, GPU-accelerated interface built with smooth micro-animations.
+- **Shared Premium Interface** — Charcoal and crimson by default, with eight saved dark and light themes in Settings. Desktop retains its fixed sidebar; mobile uses a touch-friendly drawer.
 
 ---
 
 ## 💻 Getting Started
 
-1. **Download**: Grab the latest installer (`Jtg-craft Setup 1.0.0.exe`) from the [Official Releases](https://github.com/JishnuTheGamer/jtg-craft/releases).
+1. **Download**: Grab the latest installer (`Jtg-craft-Setup-1.0.4.exe`) from the [Official Releases](https://github.com/JishnuTheGamer/jtg-craft/releases).
 2. **Install**: Run the installer and follow the quick on-screen setup.
 3. **Launch & Create**:
    - Select an install directory on your computer.
@@ -80,10 +81,11 @@ A powerful, all-in-one server application designed to create, configure, manage,
 Run a full Minecraft Java Server in your pocket! **Jtg-craft Mobile** brings the complete power of desktop server management to Android devices.
 
 ### 🌟 Mobile Highlights:
-- **Direct ARM64 JRE Execution** — Runs real Minecraft Paper Java servers natively on your phone using portable Linux aarch64 runtime.
+- **Android Java Runtimes** — Uses Bionic ARM64 Java 17, 21, and 25, selecting the runtime required by the chosen Minecraft version.
 - **Background Persistence** — Uses an integrated Foreground Service & CPU WakeLock so the server keeps running smoothly even when screen is locked or switching apps.
-- **Touch-Optimized UI** — Bottom navigation bar, adaptive layout, virtual keyboard optimization, and tap-friendly controls.
+- **Touch-Optimized UI** — Hamburger sidebar, adaptive layout, virtual keyboard optimization, and tap-friendly controls.
 - **Independent Updates** — PC and Mobile have dedicated, decoupled release channels (`update-check.json` for PC and `mobile/mobile-update-check.json` for Android).
+- **Verified In-App Updates** — After a one-time native upgrade from the original APK, complete web updates and future APK upgrades download inside the app. Android still requires installation confirmation for APK upgrades. See [release and upgrade details](RELEASE-NOTES.md).
 
 ---
 

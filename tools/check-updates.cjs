@@ -1,0 +1,38 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { Readable } = require('node:stream');
+const { requiredJava, targetJava } = require('../lib/java-policy.cjs');
+const { applyUpdate, prepareInstaller } = require('../lib/update-manager.cjs');
+(async () => {
+    for (const [version, required] of [['1.20.4',17],['1.20.5',21],['1.21',21],['1.21.11',21],['26.1 (Tiny Takeover)',25],['paper-26.2-121.jar',25],['1.17.1',17]]) assert.equal(requiredJava(version),required);
+    assert.throws(() => targetJava('17','1.21.1'));
+    assert.throws(() => targetJava('21','26.2'));
+    assert.equal(targetJava('auto','26.1'),25);
+    const baseDir = path.resolve('ui-preview/update-test');
+    await fs.mkdir(path.join(baseDir,'src'),{recursive:true});
+    const target = path.join(baseDir,'src/style.css');
+    await fs.writeFile(target,'original');
+    const content = Buffer.from('new style');
+    const manifest = {version:'1.0.4',versionCode:104,files:['src/style.css','update-check.json'],sha256:{'src/style.css':crypto.createHash('sha256').update(content).digest('hex')}};
+    await assert.rejects(applyUpdate({baseDir,manifest,download:async()=>Buffer.from('bad download')}),/Checksum/);
+    assert.equal(await fs.readFile(target,'utf8'),'original');
+    await assert.rejects(applyUpdate({baseDir,manifest:{...manifest,files:['../outside.js']},download:async()=>content}),/Unsupported/);
+    const result = await applyUpdate({baseDir,manifest,download:async()=>content});
+    assert(result.success);assert.equal(await fs.readFile(target,'utf8'),'new style');
+    assert.equal(JSON.parse(await fs.readFile(path.join(baseDir,'update-check.json'))).versionCode,104);
+    // A write failure after a successful file replacement must restore that file.
+    await fs.writeFile(target,'original');
+    await fs.unlink(path.join(baseDir,'update-check.json'));await fs.mkdir(path.join(baseDir,'update-check.json'));
+    await assert.rejects(applyUpdate({baseDir,manifest,download:async()=>content}));
+    assert.equal(await fs.readFile(target,'utf8'),'original');
+    await fs.rmdir(path.join(baseDir,'update-check.json'));
+    const installer = Buffer.from('installer fixture');
+    const binaryUpdate = {url:'https://github.com/JishnuTheGamer/jtg-craft/releases/download/test/app.exe',sha256:crypto.createHash('sha256').update(installer).digest('hex')};
+    const downloaded = await prepareInstaller({directory:baseDir,update:binaryUpdate,request:async()=>({headers:{},data:Readable.from([installer])})});
+    assert.equal(await fs.readFile(downloaded,'utf8'),'installer fixture');
+    await assert.rejects(prepareInstaller({directory:baseDir,update:binaryUpdate,request:async()=>({headers:{},data:Readable.from([Buffer.from('corrupt')])})}),/Checksum|checksum/);
+    assert.equal(await fs.readFile(downloaded,'utf8'),'installer fixture');
+    console.log('Java requirements, incompatible overrides, update checksums, path validation, successful activation and write-failure rollback passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

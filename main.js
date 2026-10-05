@@ -12,7 +12,9 @@ const { spawn, exec, execFile } = require('child_process');
 const net      = require('net');
 const axios    = require('axios');
 const archiver = require('archiver');
-const { autoUpdater } = require('electron-updater');
+const { requiredJava, targetJava } = require('./lib/java-policy.cjs');
+const { applyUpdate, prepareInstaller } = require('./lib/update-manager.cjs');
+const { extractRuntimeZip } = require('./lib/zip-runtime.cjs');
 
 // Low-end PC Optimizations
 app.commandLine.appendSwitch('disable-gpu-vsync');
@@ -56,6 +58,16 @@ let installDir     = '';   // Root dir chosen by user
 let currentServerDir = ''; // {installDir}/servers/{name}
 let serverRunning  = false;
 let portableJavaPath = '';  // Path to portable java.exe
+let pendingBinaryUpdate = '';
+let pendingBinaryHash = '';
+async function installPendingBinaryUpdate() {
+    const hash = require('crypto').createHash('sha256').update(await fs.readFile(pendingBinaryUpdate)).digest('hex');
+    if (hash !== pendingBinaryHash) throw new Error('Downloaded installer is damaged. Download the update again.');
+    const installer = spawn(pendingBinaryUpdate, [], { detached: true, stdio: 'ignore' });
+    await new Promise((resolve, reject) => { installer.once('spawn', resolve); installer.once('error', reject); });
+    installer.unref();
+    app.quit();
+}
 
 // ── Create Window ───────────────────────────────────────────
 function createWindow() {
@@ -164,11 +176,11 @@ app.whenReady().then(() => {
 // ── App Shutdown Handlers ───────────────────────────────────
 let isQuitting = false;
 
-async function gracefulServerShutdown(timeoutMs = 4000) {
+async function gracefulServerShutdown(timeoutMs = 4000, force = true) {
     if (!serverProcess && !serverRunning) return;
     try {
         if (serverProcess && serverProcess.stdin && serverProcess.stdin.writable) {
-            serverProcess.stdin.write('stop\n');
+            serverProcess.stdin.write(force ? 'stop\n' : 'save-all\nstop\n');
         }
     } catch (_) {}
 
@@ -182,6 +194,7 @@ async function gracefulServerShutdown(timeoutMs = 4000) {
         await Promise.race([exitPromise, timeoutPromise]);
 
         if (serverProcess && serverProcess.pid) {
+            if (!force) throw new Error('Server is still saving. Update was postponed; retry after it stops.');
             try {
                 exec(`taskkill /F /T /PID ${serverProcess.pid}`, () => {});
             } catch (_) {}
@@ -238,12 +251,16 @@ function getAppBasePath() {
 }
 
 // ── Auto Updater & GitHub Hot-Patch IPC ───────────────────────
-ipcMain.handle('install-update', () => {
+ipcMain.handle('install-update', async () => {
+    await gracefulServerShutdown(15000, false);
+    if (pendingBinaryUpdate) { await installPendingBinaryUpdate(); return; }
     app.relaunch();
     app.exit(0);
 });
 
-ipcMain.handle('relaunch-app', () => {
+ipcMain.handle('relaunch-app', async () => {
+    await gracefulServerShutdown(15000, false);
+    if (pendingBinaryUpdate) { await installPendingBinaryUpdate(); return; }
     app.relaunch();
     app.exit(0);
 });
@@ -314,63 +331,37 @@ ipcMain.handle('check-for-updates-manual', async () => {
 });
 
 ipcMain.handle('apply-github-hot-update', async () => {
-    // 1. Fetch remote manifest with cache-busting
-    const manifestResp = await axios.get(`${GITHUB_CONFIG.rawManifestUrl}?t=${Date.now()}`, {
-        headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' },
-        timeout: 10000
-    });
-    const manifest = manifestResp.data;
-    if (!manifest) throw new Error('Could not retrieve update manifest from GitHub repository.');
-
-    const filesToUpdate = manifest.files && Array.isArray(manifest.files) && manifest.files.length > 0
-        ? manifest.files
-        : ['src/index.html', 'src/style.css', 'src/renderer.js', 'main.js', 'preload.js', 'update-check.json'];
-
-    const baseDir = getAppBasePath();
-    const total = filesToUpdate.length;
-    let completed = 0;
-
-    for (let i = 0; i < filesToUpdate.length; i++) {
-        const relFile = filesToUpdate[i].replace(/^\//, '');
-        const targetPath = path.join(baseDir, relFile);
-        const fileUrl = `https://raw.githubusercontent.com/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${GITHUB_CONFIG.branch}/${relFile}?t=${Date.now()}`;
-
-        try {
-            const fileResp = await axios.get(fileUrl, {
-                responseType: 'arraybuffer',
-                timeout: 15000,
-                headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'JtgCraft/1.0' }
-            });
-
-            await fs.mkdir(path.dirname(targetPath), { recursive: true });
-            await fs.writeFile(targetPath, Buffer.from(fileResp.data));
-
-            completed++;
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                const pct = Math.round((completed / total) * 100);
-                mainWindow.webContents.send('hot-update-progress', {
-                    current: completed,
-                    total,
-                    file: relFile,
-                    pct
-                });
-            }
-        } catch (downloadErr) {
-            console.error(`Failed to download update file ${relFile}:`, downloadErr.message);
-            throw new Error(`Failed to update ${relFile}: ${downloadErr.message}`);
-        }
+    const response = await axios.get(GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now(), { timeout: 15000 });
+    const manifest = response.data;
+    if (isNewerVersion(manifest.minimumBinaryVersion, app.getVersion())) {
+        if (!app.isPackaged) throw new Error('Use the installed PC app to upgrade its runtime.');
+        pendingBinaryUpdate = await prepareInstaller({
+            directory: path.join(app.getPath('userData'), 'updates'), update: manifest.nativeUpdate,
+            request: url => axios.get(url, { responseType: 'stream', timeout: 300000 }),
+            progress: info => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('hot-update-progress', info); }
+        });
+        pendingBinaryHash = manifest.nativeUpdate.sha256;
+        return { success: true, version: manifest.version, versionCode: manifest.versionCode, nativeUpdate: true };
     }
-
-    return {
-        success: true,
-        version: manifest.version,
-        versionCode: manifest.versionCode
-    };
+    return applyUpdate({
+        baseDir: getAppBasePath(), manifest,
+        download: async file => {
+            const ref = manifest.sourceRef || GITHUB_CONFIG.branch;
+            if (!/^[a-zA-Z0-9._-]+$/.test(ref)) throw new Error('Invalid update reference.');
+            const url = 'https://raw.githubusercontent.com/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/' + ref + '/' + file;
+            return (await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 })).data;
+        },
+        progress: info => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('hot-update-progress', info); }
+    });
 });
 
 ipcMain.handle('get-app-version', async () => {
     const local = await getLocalManifest();
     return local.version || app.getVersion();
+});
+ipcMain.handle('get-installed-update-info', async () => {
+    const local = await getLocalManifest();
+    return { version: local.version, versionCode: local.versionCode };
 });
 
 ipcMain.handle('get-update-changelog', async () => {
@@ -388,7 +379,7 @@ ipcMain.handle('get-update-changelog', async () => {
 // ── Java Catalog & Multi-Version Mapping ──────────────────────
 const JAVA_DOWNLOAD_CATALOG = {
     25: {
-        apiUrl: 'https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&os=windows&vendor=eclipse',
+        apiUrl: 'https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse',
         fallbackUrl: 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip',
         fallbackFileName: 'OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip',
         name: 'Java 25 JRE'
@@ -407,25 +398,7 @@ const JAVA_DOWNLOAD_CATALOG = {
     }
 };
 
-function getRecommendedJavaVersion(mcVersion) {
-    if (!mcVersion) return 21;
-    const cleanVer = String(mcVersion).trim();
-    // 26.x (e.g. 26.1, 26.2, paper-26.2-121.jar)
-    if (/^26(\.|$)/.test(cleanVer) || cleanVer.includes('26.')) {
-        return 25;
-    }
-    const match = cleanVer.match(/^1\.(\d+)(?:\.(\d+))?/);
-    if (match) {
-        const minor = parseInt(match[1], 10);
-        const patch = parseInt(match[2] || '0', 10);
-        if (minor >= 21) return 21;
-        if (minor === 20 && patch >= 5) return 21;
-        if (minor >= 18) return 17;
-        if (minor === 17) return 17;
-        return 17;
-    }
-    return 21;
-}
+function getRecommendedJavaVersion(mcVersion) { return requiredJava(mcVersion); }
 
 // Inspect a directory containing bin/java.exe to discover its major Java version
 function detectJavaMajorVersion(javaRootDir) {
@@ -490,7 +463,7 @@ function findPortableJava(dir, targetMajorVersion = null) {
     if (targetMajorVersion && targetMajorVersion !== 'auto') {
         const targetNum = parseInt(targetMajorVersion, 10);
         const exact = runtimes.find(r => r.version === targetNum);
-        if (exact) return exact.path;
+        return exact ? exact.path : null;
     }
 
     // If auto or target not specified: check if current server has a recommended version
@@ -513,6 +486,7 @@ function findPortableJava(dir, targetMajorVersion = null) {
 // Download and extract Adoptium Temurin JRE (Java 25, 21, or 17)
 async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-progress') {
     const ver = parseInt(targetVer, 10) || 21;
+    if (![17, 21, 25].includes(ver)) throw new Error('Unsupported Java version. Select Java 17, 21 or 25.');
     const catalog = JAVA_DOWNLOAD_CATALOG[ver] || JAVA_DOWNLOAD_CATALOG[21];
     const javaDir = path.join(dir, 'java');
     await fs.mkdir(javaDir, { recursive: true });
@@ -530,6 +504,7 @@ async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-pr
 
     let downloadUrl = '';
     let fileName = '';
+    let expectedChecksum = '';
 
     try {
         const apiResp = await axios.get(catalog.apiUrl, { timeout: 15000 });
@@ -538,6 +513,7 @@ async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-pr
             if (jreAsset && jreAsset.binary && jreAsset.binary.package) {
                 downloadUrl = jreAsset.binary.package.link;
                 fileName = jreAsset.binary.package.name;
+                expectedChecksum = jreAsset.binary.package.checksum || '';
             }
         }
     } catch (err) {
@@ -547,7 +523,10 @@ async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-pr
     if (!downloadUrl) {
         downloadUrl = catalog.fallbackUrl;
         fileName = catalog.fallbackFileName;
+        const checksum = await axios.get(downloadUrl + '.sha256.txt', { timeout: 15000 });
+        expectedChecksum = String(checksum.data).trim().split(/\s+/)[0];
     }
+    if (!/^[a-f0-9]{64}$/i.test(expectedChecksum)) throw new Error('Java download checksum is missing. Retry when the runtime repository is reachable.');
 
     sendProgress(`Downloading Java ${ver} JRE...`, 5);
 
@@ -574,15 +553,26 @@ async function downloadJavaRuntime(dir, targetVer = 21, eventChannel = 'setup-pr
         });
 
         resp.data.pipe(writer);
+        resp.data.on('error', error => writer.destroy(error));
         await new Promise((res, rej) => { writer.on('finish', res); writer.on('error', rej); });
+        const actualChecksum = require('crypto').createHash('sha256').update(await fs.readFile(zipPath)).digest('hex');
+        if (actualChecksum !== expectedChecksum.toLowerCase()) throw new Error('Java download checksum mismatch. The archive will be discarded.');
 
         sendProgress(`Extracting Java ${ver} JRE...`, 88);
 
-        await new Promise((resolve, reject) => {
-            exec(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${javaDir}' -Force"`,
-                { timeout: 120000 },
-                (err) => err ? reject(new Error('Java extraction failed: ' + err.message)) : resolve());
-        });
+        const stage = path.join(javaDir, '.java-stage-' + ver + '-' + Date.now());
+        try {
+            await extractRuntimeZip(zipPath, path.join(stage, 'java'));
+            const runtime = getInstalledJavaRuntimes(stage).find(entry => entry.version === ver);
+            if (!runtime) throw new Error('Java archive does not contain the requested runtime.');
+            const target = path.join(javaDir, runtime.folderName);
+            if (fsSync.existsSync(target)) {
+                if (!findPortableJava(dir, ver)) throw new Error('An incomplete Java folder already exists. Rename it and retry setup.');
+            } else await fs.rename(runtime.rootDir, target);
+        } finally {
+            // The stage path is always a generated child of the Java installation directory.
+            if (stage.startsWith(javaDir + path.sep)) await fs.rm(stage, {recursive:true,force:true});
+        }
 
         await fs.unlink(zipPath).catch(() => {});
         sendProgress(`Java ${ver} installed successfully!`, 100);
@@ -789,7 +779,7 @@ ipcMain.handle('check-existing-server', async (_, dir) => {
 // ── Paper Version Catalog (direct download URLs) ────────────
 const PAPER_VERSIONS = {
     "26.2 (Chaos Cubed Update)": "https://fill-data.papermc.io/v1/objects/0de30efb024bc8b83c9c7d507d11802897ad8056b6110ec09fe1a91d126ccb54/paper-26.2-121.jar",
-    "26.1 (Tiny Takeover Update)": "https://fill-data.papermc.io/v1/objects/d175ef544246c69df6689d80f2525bad2faf41aa24c88f08fd6cfca15139495c/paper-26.1-23.jar",
+    "26.1.2 (Tiny Takeover Update)": "https://fill-data.papermc.io/v1/objects/1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7/paper-26.1.2-74.jar",
     "1.21.11": "https://fill-data.papermc.io/v1/objects/e708e8c132dc143ffd73528cccb9532e2eb17628b1a0eee74469bf466c7003f8/paper-1.21.11-116.jar",
     "1.21.11-rc3": "https://fill-data.papermc.io/v1/objects/213ceae4eb2268fc110a8605c00597ab56fe733ec41a59d06689de178bbec3f9/paper-1.21.11-rc3-31.jar",
     "1.21.11-rc2": "https://fill-data.papermc.io/v1/objects/417e9e6fb7cd34245c6a2a5ad4479eea018dc373fe36e74a6224b3652c784723/paper-1.21.11-rc2-29.jar",
@@ -871,7 +861,7 @@ async function downloadPaperJar(serverDir, version) {
     if (version.includes('26.2')) {
         jarFileName = 'paper-26.2-121.jar';
     } else if (version.includes('26.1')) {
-        jarFileName = 'paper-26.1-23.jar';
+        jarFileName = 'paper-26.1.2-74.jar';
     } else {
         jarFileName = downloadUrl.split('/').pop() || 'paper.jar';
     }
@@ -1014,7 +1004,7 @@ async function repairMetadata(serverDir, existingMeta = null) {
         if (foundJar.includes('26.2')) {
             detectedVer = '26.2 (Chaos Cubed Update)';
         } else if (foundJar.includes('26.1')) {
-            detectedVer = '26.1 (Tiny Takeover Update)';
+            detectedVer = '26.1.2 (Tiny Takeover Update)';
         } else {
             const vMatch = foundJar.match(/([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-rc[0-9]+|-pre[0-9]+)?)/i);
             if (vMatch) {
@@ -1115,7 +1105,7 @@ ipcMain.handle('get-java-settings', async () => {
 
     const currentSetting = meta.javaVersion || 'auto';
     const recommendedVersion = getRecommendedJavaVersion(meta.version);
-    const targetVer = (currentSetting === 'auto') ? recommendedVersion : parseInt(currentSetting, 10);
+    const targetVer = targetJava(currentSetting, meta.version);
 
     const runtimes = getInstalledJavaRuntimes(installDir);
     const installedVersions = runtimes.map(r => r.version).filter(Boolean);
@@ -1138,12 +1128,12 @@ ipcMain.handle('set-java-version', async (_, chosenSetting) => {
     const meta = await ensureServerMetadata(currentServerDir);
 
     const setting = chosenSetting || 'auto';
+    const targetVer = targetJava(setting, meta.version);
     meta.javaVersion = setting;
     const metaPath = path.join(currentServerDir, '.mcmeta.json');
     await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
 
     const recVer = getRecommendedJavaVersion(meta.version);
-    const targetVer = (setting === 'auto') ? recVer : parseInt(setting, 10);
 
     let activePath = findPortableJava(installDir, targetVer);
     let justDownloaded = false;
@@ -1221,7 +1211,7 @@ ipcMain.handle('server-start', async () => {
     // Determine Java executable based on server config & Minecraft version
     const configuredSetting = meta.javaVersion || 'auto';
     const recommendedVersion = getRecommendedJavaVersion(meta.version);
-    const targetVer = (configuredSetting === 'auto') ? recommendedVersion : parseInt(configuredSetting, 10);
+    const targetVer = targetJava(configuredSetting, meta.version);
 
     let javaCmd = 'java';
     if (installDir) {

@@ -109,11 +109,28 @@
             40% { transform: scale(1); opacity: 1; }
         }
     </style>
+    <script>
+        try {
+            var theme = localStorage.getItem('jtg-theme') || 'ember';
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.dataset.appearance = ['paper','sky','rose'].includes(theme) ? 'light' : 'dark';
+        } catch (_) {}
+    </script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body::before { display: none; }
+        .logo-img { box-shadow: none; }
+        .tagline { color: var(--text-2); letter-spacing: 1.5px; text-transform: none; }
+        .loading-dots span { background: var(--accent); }
+        @media (prefers-reduced-motion: reduce) {
+            .logo, .tagline, .loading-dots { opacity: 1; transform: none; }
+        }
+    </style>
 </head>
 <body>
     <div class="splash-container">
         <div class="logo"><img src="../assets/logo.png" alt="Jtg-Craft Logo" class="logo-img"></div>
-        <div class="tagline">Best Minecraft Server Manager</div>
+        <div class="tagline">Your server. Your world.</div>
         <div class="loading-dots">
             <span></span>
             <span></span>

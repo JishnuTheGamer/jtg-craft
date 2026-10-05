@@ -22,11 +22,12 @@
     const JavaManager   = getPlugin('JavaManager');
     const FileManager   = getPlugin('FileManager');
     const SystemInfo    = getPlugin('SystemInfo');
+    const AppUpdater    = getPlugin('AppUpdater');
     const CapApp        = (Cap.Plugins && Cap.Plugins.App) ? Cap.Plugins.App : {};
 
     // ── Mobile Update Config (GitHub Data Center) ───────────────
-    const BUNDLED_APP_VERSION = '1.0.7';
-    const BUNDLED_APP_VERSION_CODE = 1007;
+    const BUNDLED_APP_VERSION = '1.0.8';
+    const BUNDLED_APP_VERSION_CODE = 1008;
 
     const MOBILE_GITHUB_CONFIG = {
         owner: 'JishnuTheGamer',
@@ -401,18 +402,13 @@
     hookListener(JavaManager, 'download-progress');
     hookListener(FileManager, 'backup-progress');
     hookListener(FileManager, 'plugin-download-progress');
+    AppUpdater.addListener?.('update-progress', data => emitEvent('hot-update-progress', data));
 
-    function getRecommendedJavaForMc(mcVersion) {
-        if (!mcVersion) return 17;
-        try {
-            const parts = String(mcVersion).split('.');
-            const major = parseInt(parts[0], 10) || 1;
-            const minor = parseInt(parts[1], 10) || 0;
-            if (major > 1 || minor >= 21) return 21;
-            if (minor >= 18) return 17;
-            if (minor >= 17) return 16;
-        } catch (_) {}
-        return 17;
+    function getRecommendedJavaForMc(version) {
+        const m = String(version || '').match(/(?:^|[^\d])(\d+)\.(\d+)(?:\.(\d+))?/);
+        if (!m) return 21;
+        if (+m[1] >= 26) return 25;
+        return +m[1] === 1 && (+m[2] >= 21 || (+m[2] === 20 && +(m[3] || 0) >= 5)) ? 21 : 17;
     }
 
     // ── Expose window.api (Identical signature to Electron preload.js) ──
@@ -514,6 +510,9 @@
         setJavaVersion: async (setting) => {
             try {
                 const s = String(setting || 'auto');
+                const cfgBefore = await window.api.getServerConfig();
+                const minimum = getRecommendedJavaForMc(cfgBefore.version);
+                if (!['auto','17','21','25'].includes(s) || (s !== 'auto' && +s < minimum)) throw new Error('This Minecraft version needs Java ' + minimum + ' or newer. Select Auto.');
                 if (JavaManager.setJavaVersion) {
                     await JavaManager.setJavaVersion({ setting: s });
                 }
@@ -524,7 +523,10 @@
                 } catch (_) {}
 
                 // If user selected Java 21 or higher, check if installed; if not, download & install!
-                if (s === '21' || s === '25') {
+                if (s === '25') {
+                    const chk = await JavaManager.checkJava25();
+                    if (!chk.installed) await window.api.installJava({version: '25'});
+                } else if (s === '21') {
                     if (JavaManager.checkJava21) {
                         const chk = await JavaManager.checkJava21();
                         if (!chk || !chk.installed) {
@@ -554,6 +556,9 @@
             }
         },
 
+        setInterfaceTheme: async (light) => {
+            if (SystemInfo.setInterfaceTheme) return SystemInfo.setInterfaceTheme({ light: !!light });
+        },
         getSystemInfo: async () => {
             try {
                 if (SystemInfo.getSystemInfo) {
@@ -673,6 +678,8 @@
         fetchPaperVersions: async () => {
             return [
                 "1.21.11",
+                "26.2",
+                "26.1.2",
                 "1.21.10",
                 "1.21.9",
                 "1.21.8",
@@ -1256,26 +1263,17 @@
         // ── Updates (GitHub Data Center OTA) ──────────────────
         checkForUpdatesManual: async () => {
             try {
-                const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
-                const remote = await resp.json();
-                const local = await window.api.getAppVersion();
-                const localCode = parseInt(localStorage.getItem('installed_ota_version_code') || String(BUNDLED_APP_VERSION_CODE), 10);
-                const remoteCode = parseInt(remote.versionCode || String(BUNDLED_APP_VERSION_CODE), 10);
-                const hasUpdate = (remoteCode > localCode) || isNewerVersion(remote.version, local);
-                return {
-                    updateAvailable: hasUpdate,
-                    available: hasUpdate,
-                    version: remote.version,
-                    versionCode: remoteCode,
-                    currentVersion: local,
-                    currentVersionCode: localCode,
-                    downloadUrl: MOBILE_GITHUB_CONFIG.releasesUrl,
-                    changelog: remote.changelog,
-                    files: remote.files || []
-                };
-            } catch (e) {
-                return { updateAvailable: false, available: false, error: e.message };
-            }
+                const response = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now(), {signal: createTimeoutSignal(15000)});
+                if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
+                const remote = await response.json();
+                const installed = await AppUpdater.getInstalledVersions();
+                const nativeUpdate = !!remote.nativeUpdate && remote.nativeUpdate.versionCode > installed.nativeCode;
+                const hasUpdate = nativeUpdate || remote.versionCode > installed.versionCode;
+                return {updateAvailable: hasUpdate, available: hasUpdate, nativeUpdate,
+                    version: remote.version, versionCode: remote.versionCode, currentVersion: installed.version,
+                    currentVersionCode: installed.versionCode, downloadUrl: remote.nativeUpdate?.url || MOBILE_GITHUB_CONFIG.releasesUrl,
+                    changelog: remote.changelog, files: remote.files || []};
+            } catch (e) { return {updateAvailable: false, available: false, error: e.message}; }
         },
         getUpdateChangelog: async () => {
             try {
@@ -1298,57 +1296,19 @@
             };
         },
         getAppVersion: async () => {
-            try {
-                let baseVer = BUNDLED_APP_VERSION;
-                if (CapApp.getInfo) {
-                    const info = await CapApp.getInfo();
-                    if (info && info.version && isNewerVersion(info.version, baseVer)) {
-                        baseVer = info.version;
-                    }
-                }
-                const otaVer = localStorage.getItem('installed_ota_version');
-                if (otaVer && isNewerVersion(otaVer, baseVer)) {
-                    return otaVer;
-                }
-                return baseVer;
-            } catch (e) {
-                return BUNDLED_APP_VERSION;
-            }
+            try { return (await AppUpdater.getInstalledVersions()).version; }
+            catch (_) { return BUNDLED_APP_VERSION; }
         },
+        getInstalledUpdateInfo: () => AppUpdater.getInstalledVersions(),
         applyGithubHotUpdate: async () => {
-            try {
-                const resp = await fetch(MOBILE_GITHUB_CONFIG.rawManifestUrl + '?t=' + Date.now());
-                const manifest = await resp.json();
-                const files = manifest.files || [];
-                let updated = 0;
-
-                for (let i = 0; i < files.length; i++) {
-                    const filePath = files[i];
-                    const rawUrl = `https://raw.githubusercontent.com/${MOBILE_GITHUB_CONFIG.owner}/${MOBILE_GITHUB_CONFIG.repo}/${MOBILE_GITHUB_CONFIG.branch}/${filePath}?t=${Date.now()}`;
-                    const fileResp = await fetch(rawUrl);
-                    if (fileResp.ok) {
-                        const content = await fileResp.text();
-                        localStorage.setItem('patch_' + filePath, content);
-                        updated++;
-                    }
-                    emitEvent('hot-update-progress', {
-                        current: i + 1,
-                        total: files.length,
-                        file: filePath
-                    });
-                }
-
-                if (manifest.version) {
-                    localStorage.setItem('installed_ota_version', manifest.version);
-                }
-                if (manifest.versionCode) {
-                    localStorage.setItem('installed_ota_version_code', String(manifest.versionCode));
-                }
-
-                return { success: true, updatedFiles: updated, version: manifest.version || '1.0', versionCode: manifest.versionCode || 1 };
-            } catch (e) {
-                return { error: 'Failed to apply data-center update: ' + e.message };
-            }
+            const update = await window.api.checkForUpdatesManual();
+            if (update.error) throw new Error(update.error);
+            if (!update.updateAvailable) throw new Error('This app is already up to date.');
+            return update.nativeUpdate ? await AppUpdater.prepareNativeUpdate() : await AppUpdater.prepareWebUpdate();
+        },
+        installNativeUpdate: async () => {
+            await ServerProcess.prepareForUpdate();
+            return await AppUpdater.installNativeUpdate();
         },
         exitApp: async () => {
             try {
@@ -1370,33 +1330,9 @@
             try { window.close(); } catch (_) {}
         },
         relaunchApp: async () => {
-            try {
-                if (ServerProcess && ServerProcess.relaunchApp) {
-                    await ServerProcess.relaunchApp();
-                    return;
-                }
-            } catch (_) {}
-            try {
-                if (ServerProcess && ServerProcess.stop) {
-                    await ServerProcess.stop().catch(() => {});
-                }
-            } catch (_) {}
-            try {
-                if (CapApp && CapApp.exitApp) {
-                    return await CapApp.exitApp();
-                }
-            } catch (_) {}
-            try {
-                if (navigator.app && navigator.app.exitApp) {
-                    navigator.app.exitApp();
-                    return;
-                }
-            } catch (_) {}
-            window.location.reload();
-            return Promise.resolve();
+            await ServerProcess.prepareForUpdate();
+            await AppUpdater.activateWebUpdate();
         },
-        onHotUpdateProgress:  (cb) => onNativeEvent('hot-update-progress', cb),
-        onHotUpdateAvailable: (cb) => onNativeEvent('hot-update-available', cb),
 
         // ── Events (Native → JS) ──────────────────────────────
         onDownloadProgress: (cb) => onNativeEvent('download-progress', cb),
@@ -1421,26 +1357,22 @@
 
     console.log('[Jtg-craft Mobile] Bridge initialized successfully with full Electron API parity.');
 
-    // ── Automatic Background Update Detection (Parity with PC) ──
-    setTimeout(async () => {
+    // Download in the background; activation waits for a safe server stop and user action.
+    let preparing = false, preparedCode = 0;
+    async function backgroundUpdate() {
+        if (preparing) return;
         try {
-            if (window.api && window.api.checkForUpdatesManual) {
-                const res = await window.api.checkForUpdatesManual();
-                if (res && res.updateAvailable) {
-                    emitEvent('hot-update-available', res);
-                }
-            }
-        } catch (_) {}
-    }, 3500);
-
-    setInterval(async () => {
-        try {
-            if (window.api && window.api.checkForUpdatesManual) {
-                const res = await window.api.checkForUpdatesManual();
-                if (res && res.updateAvailable) {
-                    emitEvent('hot-update-available', res);
-                }
-            }
-        } catch (_) {}
-    }, 30 * 60 * 1000);
+            const update = await window.api.checkForUpdatesManual();
+            if (!update.updateAvailable || preparedCode === update.versionCode) return;
+            emitEvent('hot-update-available', update);
+            if (localStorage.getItem('jtg-auto-download') === 'false') return;
+            preparing = true;
+            const ready = await window.api.applyGithubHotUpdate();
+            preparedCode = update.versionCode;
+            emitEvent('hot-update-available', {...update, prepared:true, nativeUpdate:!!ready.nativeUpdate});
+        } catch (error) { console.warn('Automatic download postponed:', error.message); }
+        finally { preparing = false; }
+    }
+    setTimeout(backgroundUpdate, 3500);
+    setInterval(backgroundUpdate, 30 * 60 * 1000);
 })();

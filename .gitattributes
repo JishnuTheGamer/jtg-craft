@@ -1,0 +1,11 @@
+# OTA checksums must describe the same bytes in Windows builds and GitHub raw files.
+*.js text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.java text eol=lf
+*.md text eol=lf
+*.so binary
+*.png binary
+*.ico binary

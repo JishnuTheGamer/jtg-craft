@@ -82,6 +82,8 @@ Write-Host "Android SDK Platform 34 Installed" -ForegroundColor Green
 
 # ── 4. Sync Web Assets to Android Project ───────────────────
 Write-Host "`n[4/5] Syncing latest web assets to Android..." -ForegroundColor Yellow
+& node (Join-Path $ScriptDir "..\tools\sync-ui.cjs")
+if ($LASTEXITCODE -ne 0) { throw "Shared interface sync failed" }
 $srcDir = Join-Path $ScriptDir "src"
 $webAssets = Join-Path $ScriptDir "www"
 if (Test-Path $srcDir) {

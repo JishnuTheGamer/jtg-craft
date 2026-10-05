@@ -10,7 +10,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JavaManagerPlugin.class);
         registerPlugin(FileManagerPlugin.class);
         registerPlugin(SystemInfoPlugin.class);
+        registerPlugin(AppUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
+        java.io.File active = AppUpdaterPlugin.activeBundle(this);
+        if (active != null) getBridge().setServerBasePath(active.getAbsolutePath());
     }
 
     @Override
