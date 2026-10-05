@@ -24,8 +24,11 @@ gh release create v1.0.4 --target $releaseCommit --draft --title 'JTG Craft — 
 if ($LASTEXITCODE -ne 0) { throw 'Could not create the draft release. Existing releases were kept.' }
 gh release upload v1.0.4 'dist/Jtg-craft-Setup-1.0.4.exe' 'dist/Jtg-craft-Setup-1.0.4.exe.blockmap' 'dist/latest.yml' 'mobile/apk/jtg-craft-mobile-v1.apk'
 if ($LASTEXITCODE -ne 0) { throw 'Asset upload failed. Release remains a draft and main is unchanged.' }
-$remoteRelease = gh api repos/JishnuTheGamer/jtg-craft/releases/tags/v1.0.4 | ConvertFrom-Json
+$releaseList = gh api repos/JishnuTheGamer/jtg-craft/releases | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'Could not verify uploaded assets.' }
+$matchingReleases = @($releaseList | Where-Object { $_.tag_name -eq 'v1.0.4' -and $_.draft })
+if ($matchingReleases.Count -ne 1) { throw 'Expected exactly one uploaded draft release.' }
+$remoteRelease = $matchingReleases[0]
 $expectedAssets = @('Jtg-craft-Setup-1.0.4.exe', 'Jtg-craft-Setup-1.0.4.exe.blockmap', 'latest.yml', 'jtg-craft-mobile-v1.apk')
 if ($remoteRelease.assets.Count -ne $expectedAssets.Count) { throw 'Release asset count mismatch; release remains a draft.' }
 foreach ($expectedAsset in $expectedAssets) {
@@ -38,7 +41,7 @@ foreach ($asset in $remoteRelease.assets) {
     $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $localAsset -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($asset.digest -and $asset.digest -ne $expectedDigest) { throw "GitHub asset digest mismatch: $($asset.name)" }
 }
-gh release edit v1.0.4 --draft=false
+gh api --method PATCH "repos/JishnuTheGamer/jtg-craft/releases/$($remoteRelease.id)" -F draft=false --silent
 if ($LASTEXITCODE -ne 0) { throw 'Release could not be made available; main is unchanged.' }
 git push origin 'HEAD:refs/heads/main'
 if ($LASTEXITCODE -ne 0) { throw 'Release assets are available but main was not advanced. Resolve the main-branch changes before enabling update notifications.' }
