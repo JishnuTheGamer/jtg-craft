@@ -1,3 +1,108 @@
+/* JTG_PLUGIN_CATALOG_START */
+// Embedded into the existing PC main process and Android bridge by sync-ui.cjs.
+// No new runtime file is required by older hot updaters.
+function createPluginCatalog({ getJSON, getContext, curated = [], getInstalled = async () => [] }) {
+    const loaders = ['paper', 'spigot', 'bukkit'];
+    const cache = new Map();
+    const normalize = value => {
+        const match = String(value || '').match(/(?:^|[^\d])(\d+(?:\.\d+){0,2}(?:-(?:pre|rc)\d+)?)(?=$|[^\d.])/);
+        if (!match) throw new Error('Cannot read the Minecraft server version. Open or create a server first.');
+        return match[1];
+    };
+    async function context() {
+        const value = await getContext();
+        return { ...value, version: normalize(value.version) };
+    }
+    function choose(versions, serverVersion) {
+        if (!Array.isArray(versions)) throw new Error('Invalid plugin version response.');
+        const eligible = versions.filter(version => Array.isArray(version.game_versions) && version.game_versions.includes(serverVersion)
+            && Array.isArray(version.loaders) && version.loaders.some(loader => loaders.includes(loader)));
+        eligible.sort((a, b) => (a.version_type === 'release' ? 0 : 1) - (b.version_type === 'release' ? 0 : 1)
+            || Date.parse(b.date_published || 0) - Date.parse(a.date_published || 0));
+        for (const version of eligible) {
+            const files = (version.files || []).filter(file => /^[^/\\]+\.jar$/i.test(file.filename || '')
+                && !/(?:[-_.](?:sources|dev|javadoc|fabric|forge|neoforge|quilt)(?:[-_.]|$))/i.test(file.filename)
+                && /^https:\/\//i.test(file.url || '') && /^[a-f0-9]{128}$/i.test(file.hashes?.sha512 || ''));
+            const file = files.find(file => /(?:paper|spigot|bukkit)/i.test(file.filename)) || files.find(file => file.primary) || files[0];
+            if (file) return { downloadUrl: file.url, fileName: file.filename, versionNumber: version.version_number,
+                versionId: version.id, size: file.size, sha512: file.hashes.sha512, serverVersion, compatible: true };
+        }
+        return null;
+    }
+    async function resolve(project, options = {}) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(project || '')) throw new Error('Choose a plugin from the catalog.');
+        const server = options.context || await context();
+        const key = server.version + ':' + project;
+        const previous = cache.get(key);
+        if (!options.fresh && previous && Date.now() - previous.time < 60000) return previous.value;
+        const params = new URLSearchParams({ loaders: JSON.stringify(loaders), game_versions: JSON.stringify([server.version]) });
+        const versions = await getJSON(`https://api.modrinth.com/v2/project/${encodeURIComponent(project)}/version?${params}`);
+        const value = choose(versions, server.version);
+        if (cache.size > 300) cache.clear();
+        cache.set(key, { time: Date.now(), value });
+        return value;
+    }
+    async function getVersion(project, options = {}) {
+        const server = await context();
+        const value = await resolve(project, { ...options, context: server });
+        if (!value) throw new Error(`No Paper/Spigot/Bukkit JAR is listed for Minecraft ${server.version}.`);
+        return { ...value, serverKey: server.key };
+    }
+    async function assertContext(expected) {
+        const actual = await context();
+        if (actual.version !== expected.serverVersion || actual.key !== expected.serverKey) throw new Error('The selected server or Minecraft version changed. Search again before installing.');
+    }
+    async function search(query = '', category = 'all') {
+        const server = await context();
+        const text = String(query || '').trim();
+        const categoryFilter = category && category !== 'all' ? category : null;
+        const facets = [['project_type:plugin'], loaders.map(loader => 'categories:' + loader)];
+        if (categoryFilter) facets.push(['categories:' + categoryFilter]);
+        const searchURL = compatible => {
+            const params = new URLSearchParams({ facets: JSON.stringify(compatible ? [...facets, ['versions:' + server.version]] : facets), limit: compatible ? '40' : '12' });
+            if (text) params.set('query', text); else params.set('index', 'downloads');
+            return 'https://api.modrinth.com/v2/search?' + params;
+        };
+        const responses = await Promise.allSettled([getJSON(searchURL(true)), ...(text ? [getJSON(searchURL(false))] : [])]);
+        if (responses.every(response => response.status === 'rejected')) throw new Error('Cannot verify plugins right now. Check your connection and try again.');
+        let candidates = curated.filter(plugin => (!categoryFilter || plugin.categories?.includes(categoryFilter))
+            && (!text || [plugin.title, plugin.slug, plugin.description].some(value => String(value || '').toLowerCase().includes(text.toLowerCase()))))
+            .map(plugin => ({ ...plugin, isCurated: true }));
+        for (const response of responses) {
+            if (response.status !== 'fulfilled') continue;
+            if (!Array.isArray(response.value?.hits)) throw new Error('Invalid plugin search response.');
+            for (const hit of response.value.hits) {
+                if (!candidates.some(item => item.slug === hit.slug || item.id === hit.project_id)) candidates.push({ ...hit, id: hit.project_id, isCurated: false });
+            }
+        }
+        if (!candidates.length && responses.every(response => response.status === 'rejected')) throw new Error('Cannot verify plugins right now. Check your connection and try again.');
+        const installed = await getInstalled();
+        const norm = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const hits = [], unavailable = [];
+        let cursor = 0, verificationFailures = 0;
+        await Promise.all(Array.from({ length: Math.min(6, candidates.length) }, async () => {
+            while (cursor < candidates.length) {
+                const position = cursor++, item = candidates[position];
+                try {
+                    const build = await resolve(item.slug || item.id, { context: server });
+                    if (build) hits.push({ ...item, ...build, position, isInstalled: installed.some(file => {
+                        const name = norm(String(file).replace(/\.jar(?:\.disabled)?$/i, ''));
+                        return name && [item.slug, item.title].some(value => norm(value) && (name.includes(norm(value)) || norm(value).includes(name)));
+                    }) });
+                    else if (text) unavailable.push({ ...item, position, reason: `No Paper/Spigot/Bukkit JAR is listed for Minecraft ${server.version}.`, status: 'unavailable' });
+                } catch (error) {
+                    verificationFailures++;
+                    if (text) unavailable.push({ ...item, position, status: 'unverified', reason: 'Compatibility could not be verified. Try again later.' });
+                }
+            }
+        }));
+        hits.sort((a, b) => a.position - b.position); unavailable.sort((a, b) => a.position - b.position);
+        return { hits, unavailable, serverVersion: server.version, platform: 'Paper', verificationFailures,
+            warning: verificationFailures || responses.some(response => response.status === 'rejected') ? 'Some plugins could not be verified. Refresh to retry.' : '' };
+    }
+    return { search, getVersion, assertContext, choose, normalize };
+}
+/* JTG_PLUGIN_CATALOG_END */
 // ============================================================
 //  Jtg-craft Mobile — Bridge (replaces Electron preload.js)
 //  Vanilla JS compatible — ZERO bare module imports
@@ -413,6 +518,21 @@
     }
 
     // ── Expose window.api (Identical signature to Electron preload.js) ──
+    const pluginCatalog = createPluginCatalog({
+        getJSON: async url => {
+            const response = await fetch(url,{signal:createTimeoutSignal(12000)});
+            if (!response.ok) throw new Error('Plugin catalog HTTP '+response.status);
+            return response.json();
+        },
+        getContext: async () => {
+            if (!ServerProcess.getServerConfig) throw new Error('Update JTG Craft Mobile to verify plugin compatibility.');
+            const config = await ServerProcess.getServerConfig();
+            return {version:config.version,key:config.path};
+        },
+        curated: CURATED_PLUGINS,
+        getInstalled: async () => (await window.api.pluginsGetInstalled()).map(plugin=>plugin.fileName||plugin.name||'')
+    });
+
     window.api = {
         // ── Window Controls ───────────────────────────────────
         winMinimize: () => {},
@@ -943,189 +1063,14 @@
         playitRemove:  () => Promise.resolve({ error: 'Playit is available on Desktop edition.' }),
 
         // ── Plugin Manager (Modrinth Live API + Curated CDN) ──
-        pluginSearch: async (query, category) => {
-            let installedList = [];
-            try {
-                const inst = await window.api.pluginsGetInstalled();
-                installedList = (inst || []).map(p => p.fileName || p.name || '');
-            } catch (_) {}
-
-            const isInstalled = (item) => {
-                const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                const sNorm = norm(item.slug);
-                const tNorm = norm(item.title);
-                return installedList.some(f => {
-                    const fNorm = norm(f.replace(/\.jar(\.disabled)?$/i, ''));
-                    return (sNorm && (fNorm.includes(sNorm) || sNorm.includes(fNorm))) ||
-                           (tNorm && (fNorm.includes(tNorm) || tNorm.includes(fNorm)));
-                });
-            };
-
-            const hasQuery = query && query.trim().length > 0;
-            const cat = (category && category !== 'all') ? category : null;
-
-            try {
-                const facets = [['project_type:plugin']];
-                if (cat) facets.push([`categories:${cat}`]);
-                const encodedFacets = encodeURIComponent(JSON.stringify(facets));
-                let url;
-                if (hasQuery) {
-                    const encodedQuery = encodeURIComponent(query.trim());
-                    url = `https://api.modrinth.com/v2/search?query=${encodedQuery}&facets=${encodedFacets}&limit=40`;
-                } else {
-                    url = `https://api.modrinth.com/v2/search?facets=${encodedFacets}&index=downloads&limit=40`;
-                }
-
-                const resp = await fetch(url, { signal: createTimeoutSignal(6000) });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data && Array.isArray(data.hits) && data.hits.length > 0) {
-                        const results = data.hits.map(hit => ({
-                            id: hit.project_id,
-                            slug: hit.slug,
-                            title: hit.title,
-                            description: hit.description,
-                            author: hit.author,
-                            icon_url: hit.icon_url || '',
-                            downloads: hit.downloads || 0,
-                            categories: hit.categories || [],
-                            isCurated: false
-                        }));
-
-                        if (!hasQuery && !cat) {
-                            const curatedMapped = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
-                            const combined = [...curatedMapped];
-                            for (const r of results) {
-                                if (!combined.some(c => c.slug === r.slug)) {
-                                    combined.push(r);
-                                }
-                            }
-                            return combined.map(item => ({ ...item, isInstalled: isInstalled(item) }));
-                        }
-
-                        return results.map(item => ({ ...item, isInstalled: isInstalled(item) }));
-                    }
-                }
-            } catch (err) {
-                console.warn('Modrinth API search error, using curated catalog:', err);
-            }
-
-            // Fallback to curated catalog
-            let fallbackList = CURATED_PLUGINS.map(c => ({ ...c, isCurated: true }));
-            if (cat) {
-                fallbackList = fallbackList.filter(p => p.categories && p.categories.includes(cat));
-            }
-            if (hasQuery) {
-                const q = query.toLowerCase();
-                fallbackList = fallbackList.filter(p =>
-                    p.title.toLowerCase().includes(q) ||
-                    p.description.toLowerCase().includes(q) ||
-                    (p.author && p.author.toLowerCase().includes(q)) ||
-                    (p.slug && p.slug.toLowerCase().includes(q))
-                );
-            }
-            return fallbackList.map(item => ({ ...item, isInstalled: isInstalled(item) }));
-        },
-
-        pluginGetVersion: async (projectIdOrSlug) => {
-            const curated = CURATED_PLUGINS.find(p => p.slug === projectIdOrSlug || p.id === projectIdOrSlug);
-            if (curated && curated.directDownload) {
-                return {
-                    downloadUrl: curated.directDownload,
-                    fileName: curated.defaultFileName || `${curated.title}.jar`,
-                    versionNumber: 'latest'
-                };
-            }
-
-            let versionList = [];
-            try {
-                const loadersParam = encodeURIComponent(JSON.stringify(['paper', 'spigot', 'bukkit', 'purpur', 'folia']));
-                const filterUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version?loaders=${loadersParam}`;
-                const resp = await fetch(filterUrl, { signal: createTimeoutSignal(6000) });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (Array.isArray(data) && data.length > 0) versionList = data;
-                }
-            } catch (_) {}
-
-            if (versionList.length === 0) {
-                try {
-                    const rawUrl = `https://api.modrinth.com/v2/project/${projectIdOrSlug}/version`;
-                    const resp = await fetch(rawUrl, { signal: createTimeoutSignal(6000) });
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data)) versionList = data;
-                    }
-                } catch (_) {}
-            }
-
-            if (versionList.length > 0) {
-                const serverLoaders = ['paper', 'spigot', 'bukkit', 'purpur', 'folia'];
-                let preferredVer = versionList.find(v =>
-                    Array.isArray(v.loaders) && v.loaders.some(l => serverLoaders.includes(l.toLowerCase()))
-                ) || versionList[0];
-
-                const orderedVersions = [preferredVer, ...versionList.filter(v => v !== preferredVer)];
-
-                for (const ver of orderedVersions) {
-                    if (!Array.isArray(ver.files) || ver.files.length === 0) continue;
-                    const jarFiles = ver.files.filter(f =>
-                        f.filename &&
-                        f.filename.endsWith('.jar') &&
-                        !f.filename.includes('-sources') &&
-                        !f.filename.includes('-dev') &&
-                        !f.filename.includes('-javadoc')
-                    );
-                    if (jarFiles.length === 0) continue;
-                    const preferredJar = jarFiles.find(f => {
-                        const lower = f.filename.toLowerCase();
-                        return lower.includes('paper') || lower.includes('spigot') || lower.includes('bukkit') || lower.includes('purpur');
-                    }) || jarFiles.find(f => f.primary) || jarFiles[0];
-
-                    if (preferredJar && preferredJar.url) {
-                        return {
-                            downloadUrl: preferredJar.url,
-                            fileName: preferredJar.filename,
-                            versionNumber: ver.version_number || 'latest',
-                            size: preferredJar.size
-                        };
-                    }
-                }
-            }
-
-            if (curated && curated.directDownload) {
-                return {
-                    downloadUrl: curated.directDownload,
-                    fileName: curated.defaultFileName || `${curated.title}.jar`,
-                    versionNumber: 'latest'
-                };
-            }
-
-            throw new Error('Could not find a downloadable JAR for this plugin. Please try another plugin or upload a .jar manually.');
-        },
-
-        pluginInstall: async (opts) => {
-            let downloadUrl = opts.downloadUrl || opts.url;
-            let fileName = opts.fileName;
-
-            if (!downloadUrl && opts.projectId) {
-                const ver = await window.api.pluginGetVersion(opts.projectId);
-                downloadUrl = ver.downloadUrl;
-                fileName = fileName || ver.fileName;
-            }
-
-            if (!downloadUrl) throw new Error('Download URL not found for this plugin.');
-            if (!fileName) fileName = downloadUrl.split('/').pop().split('?')[0] || 'plugin.jar';
-            if (!fileName.endsWith('.jar')) fileName += '.jar';
-
-            if (FileManager.pluginInstall) {
-                return await FileManager.pluginInstall({
-                    url: downloadUrl,
-                    downloadUrl: downloadUrl,
-                    fileName: fileName
-                });
-            }
-            return { success: true };
+        pluginSearch: (query, category) => pluginCatalog.search(query,category),
+        pluginGetVersion: project => pluginCatalog.getVersion(project),
+        pluginInstall: async opts => {
+            const version = await pluginCatalog.getVersion(opts.projectId,{fresh:true});
+            if (opts.serverVersion && opts.serverVersion !== version.serverVersion) throw new Error('Minecraft version changed. Search again.');
+            await pluginCatalog.assertContext(version);
+            if (!FileManager.pluginInstall) throw new Error('Update JTG Craft Mobile to install plugins.');
+            return FileManager.pluginInstall({...version,projectId:opts.projectId});
         },
 
         pluginsGetInstalled: async () => {

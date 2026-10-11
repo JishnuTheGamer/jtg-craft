@@ -2,6 +2,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
+const pluginSource = fs.readFileSync(path.join(root, 'lib/plugin-catalog.cjs'), 'utf8').replace(/module\.exports[^\n]*/, '').trim();
+for (const target of ['main.js', 'mobile/src/mobile-bridge.js']) {
+    const file = path.join(root, target);
+    const original = fs.readFileSync(file, 'utf8').replace(/\/\* JTG_PLUGIN_CATALOG_START \*\/[\s\S]*?\/\* JTG_PLUGIN_CATALOG_END \*\/\s*/g, '');
+    const updated = `/* JTG_PLUGIN_CATALOG_START */\n${pluginSource}\n/* JTG_PLUGIN_CATALOG_END */\n` + original;
+    if (fs.readFileSync(file, 'utf8') !== updated) fs.writeFileSync(file, updated);
+}
+fs.copyFileSync(path.join(root, 'mobile/src/mobile-bridge.js'), path.join(root, 'mobile/www/mobile-bridge.js'));
 for (const [source, targets] of [
     ['ui/design.js', ['src/renderer.js', 'mobile/www/renderer.js']],
     ['ui/design.css', ['src/style.css', 'mobile/src/mobile-patches.css']],

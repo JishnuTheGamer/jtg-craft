@@ -403,7 +403,25 @@
         const badge = document.querySelector('#ui-process-state');
         if (badge) { badge.textContent = running ? 'Process running' : 'Server stopped'; badge.classList.toggle('running', running); }
     }
-    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState, runOperation, operationProgress, loadResources };
+    function renderPluginAvailability(grid, result) {
+        if (!result || Array.isArray(result)) return;
+        const context = document.createElement('p'); context.className = 'plugin-compatibility-context';
+        context.textContent = `Paper · Minecraft ${result.serverVersion} · ${result.hits?.length || 0} compatible plugins`;
+        grid.prepend(context);
+        if (result.warning) {
+            const warning = document.createElement('p'); warning.className = 'plugin-compatibility-context';
+            warning.textContent = result.warning; context.after(warning);
+        }
+        for (const plugin of result.unavailable || []) {
+            const card = document.createElement('div'); card.className = 'plugin-card plugin-unavailable';
+            const title = document.createElement('strong'); title.textContent = plugin.title;
+            const status = document.createElement('span'); status.className = 'plugin-availability-status';
+            status.textContent = plugin.status === 'unavailable' ? `Not available for Minecraft ${result.serverVersion}` : 'Compatibility unverified';
+            const reason = document.createElement('p'); reason.textContent = plugin.reason;
+            card.append(title,status,reason); grid.append(card);
+        }
+    }
+    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState, runOperation, operationProgress, loadResources, renderPluginAvailability };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();
 })();

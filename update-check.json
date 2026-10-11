@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "versionCode": 106,
+  "version": "1.0.7",
+  "versionCode": 107,
   "releaseDate": "2026-10-11",
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/Jtg-craft.Setup.1.0.0.exe",
   "files": [
@@ -16,6 +16,20 @@
     "update-check.json"
   ],
   "changelog": [
+    {
+      "version": "1.0.7",
+      "versionCode": 107,
+      "date": "2026-10-11",
+      "type": "patch",
+      "title": "Plugins matched to your Minecraft server version",
+      "changes": [
+        "Plugin search and downloads require exact server Minecraft version and Paper-compatible metadata; latest/unfiltered fallbacks removed.",
+        "Server deletion prepares the version list for recreation without restarting the app.",
+        "Auto Java version labels and creation use the same policy as the backend; manual Java remains available.",
+        "Settings operations show a progress popup; RAM and CPU limits follow actual device hardware.",
+        "Verified, staged desktop hot updates with rollback on failure and safe shutdown before relaunch."
+      ]
+    },
     {
       "version": "1.0.6",
       "versionCode": 106,
@@ -113,23 +127,23 @@
       ]
     }
   ],
-  "sourceRef": "v1.0.6",
+  "sourceRef": "v1.0.7",
   "minimumBinaryVersion": "1.0.0",
   "sha256": {
     "lib/java-policy.cjs": "94a4fc36c296de2863de892ae4c65503ae29fc2010f1c06a395d6c172c545cb1",
     "lib/update-manager.cjs": "efa50f5b87b0bb625642466a58b7ef8616f0861b347eab53c9918ef234ea1104",
     "lib/zip-runtime.cjs": "f937e476abeaf338f345a48d23ce733dd836823530a0ee0a2eef44ca0d3f2521",
     "src/index.html": "fa0f95b0a63a74d2a59244b7eb0aa50964407ad4d2889a1a0b9227c032eca2c0",
-    "src/style.css": "178dd36d0d43a9a98ccd1508c1a237adc789f9cd9a6e57f520d056b0e7c5858b",
-    "src/renderer.js": "d84cd34d9fdf7f943a93df443906b1a046098756198777109817c2a3f9c435af",
+    "src/style.css": "0d80c1b2af25484ca14334e6588ac71309eaeac84b14b28422d0444290aa993a",
+    "src/renderer.js": "4e6b62c14aca0e57e93c5a53297271022e6993d233ef2d5d455c6fdd3bc8691f",
     "src/splash.html": "23b618576f1263b9de0ab4eb3fea08f42289cba78bbe3169a1db1b5b1729fd46",
     "preload.js": "3838d3b9baa7e2359aa4571dc2d5610a09b678950e44b90c8cc4c914d00740ad",
-    "main.js": "0f66960ad10a6a19d62fe90199a6d4998ab35815d5f1373760de19f7dbdfebfb"
+    "main.js": "e4778884b54a4ab04c364b6adefa3e3700c51ed7a37d64f97558b3c1327a5d66"
   },
   "nativeUpdate": {
-    "version": "1.0.6",
+    "version": "1.0.7",
     "url": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/Jtg-craft.Setup.1.0.0.exe",
-    "sha256": "37299aff55a57395b286a720d0a67c9790f604829f2c0951e3590ec53aeddee7",
-    "size": 86326724
+    "sha256": "5c3a0a146e234523227d1b938d2cc5dd72f87fe46ff1174551a956e61d71e96e",
+    "size": 86330701
   }
 }

@@ -588,7 +588,8 @@ public class FileManagerPlugin extends Plugin {
         new Thread(() -> {
             File tmpJar = null;
             try {
-                String downloadUrl = call.getString("downloadUrl", "");
+                PluginCompatibility verified = PluginCompatibility.verify(getDefaultServerDir(), call.getString("projectId"), call.getString("serverVersion"), call.getString("versionId"), call.getString("fileName"));
+                String downloadUrl = verified.url;
                 if (downloadUrl == null || downloadUrl.trim().isEmpty()) {
                     downloadUrl = call.getString("url", "");
                 }
@@ -598,7 +599,7 @@ public class FileManagerPlugin extends Plugin {
                 }
                 downloadUrl = downloadUrl.trim();
 
-                String rawFileName = call.getString("fileName", "plugin.jar");
+                String rawFileName = verified.fileName;
                 if (rawFileName == null || rawFileName.trim().isEmpty()) rawFileName = "plugin.jar";
                 String fileName = new File(rawFileName).getName().replaceAll("[\\\\/:*?\"<>|]", "");
                 if (!fileName.toLowerCase().endsWith(".jar")) {
@@ -657,6 +658,7 @@ public class FileManagerPlugin extends Plugin {
                     throw new IOException("Too many redirects attempting to download " + fileName);
                 }
 
+                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
                 try (InputStream in = new BufferedInputStream(c.getInputStream());
                      FileOutputStream out = new FileOutputStream(tmpJar)) {
                     byte[] buf = new byte[16384];
@@ -665,6 +667,7 @@ public class FileManagerPlugin extends Plugin {
                     long lastNotify = 0;
                     while ((n = in.read(buf)) != -1) {
                         out.write(buf, 0, n);
+                        digest.update(buf, 0, n);
                         downloaded += n;
                         long now = System.currentTimeMillis();
                         if (now - lastNotify > 200) {
@@ -688,13 +691,11 @@ public class FileManagerPlugin extends Plugin {
                     throw new IOException("Downloaded plugin file was empty (0 bytes).");
                 }
 
-                if (targetJar.exists()) {
-                    targetJar.delete();
-                }
-                if (!tmpJar.renameTo(targetJar)) {
-                    copyFile(tmpJar, targetJar);
-                    tmpJar.delete();
-                }
+                StringBuilder actualHash = new StringBuilder();
+                for (byte value : digest.digest()) actualHash.append(String.format(Locale.ROOT, "%02x", value & 255));
+                if (!actualHash.toString().equalsIgnoreCase(verified.sha512) || (verified.size > 0 && tmpJar.length() != verified.size)) throw new IOException("Plugin checksum/size mismatch. Existing plugin was kept.");
+                verified.assertServer(getDefaultServerDir());
+                android.system.Os.rename(tmpJar.getAbsolutePath(), targetJar.getAbsolutePath());
 
                 try {
                     ServerProcessPlugin.patchPlayitJarIfNeeded(targetJar);

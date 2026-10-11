@@ -430,7 +430,25 @@ window.JtgJavaPolicy = { requiredJava, targetJava }; window.JtgResourcePolicy = 
         const badge = document.querySelector('#ui-process-state');
         if (badge) { badge.textContent = running ? 'Process running' : 'Server stopped'; badge.classList.toggle('running', running); }
     }
-    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState, runOperation, operationProgress, loadResources };
+    function renderPluginAvailability(grid, result) {
+        if (!result || Array.isArray(result)) return;
+        const context = document.createElement('p'); context.className = 'plugin-compatibility-context';
+        context.textContent = `Paper · Minecraft ${result.serverVersion} · ${result.hits?.length || 0} compatible plugins`;
+        grid.prepend(context);
+        if (result.warning) {
+            const warning = document.createElement('p'); warning.className = 'plugin-compatibility-context';
+            warning.textContent = result.warning; context.after(warning);
+        }
+        for (const plugin of result.unavailable || []) {
+            const card = document.createElement('div'); card.className = 'plugin-card plugin-unavailable';
+            const title = document.createElement('strong'); title.textContent = plugin.title;
+            const status = document.createElement('span'); status.className = 'plugin-availability-status';
+            status.textContent = plugin.status === 'unavailable' ? `Not available for Minecraft ${result.serverVersion}` : 'Compatibility unverified';
+            const reason = document.createElement('p'); reason.textContent = plugin.reason;
+            card.append(title,status,reason); grid.append(card);
+        }
+    }
+    window.JtgUI = { appendConsole, clearConsole, renderProperties, validateProperties, propertiesSaved, applyTheme, setProcessState, runOperation, operationProgress, loadResources, renderPluginAvailability };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();
 })();
@@ -2047,9 +2065,11 @@ const initApp = async () => {
     }
 
     // Load and render browse store plugins
+    let pluginSearchGeneration = 0;
     async function loadPlugins(query = currentPluginQuery, category = currentPluginCat) {
         const grid = $('#plugin-grid');
         if (!grid) return;
+        const generation = ++pluginSearchGeneration;
 
         grid.innerHTML = `
             <div class="plugins-loading-state" style="grid-column: 1 / -1;">
@@ -2061,17 +2081,13 @@ const initApp = async () => {
         try {
             const res = await window.api.pluginSearch(query, category);
             const plugins = Array.isArray(res) ? res : (res && Array.isArray(res.hits) ? res.hits : []);
+            if (generation !== pluginSearchGeneration) return;
             grid.innerHTML = '';
 
-            if (!plugins || plugins.length === 0) {
-                grid.innerHTML = `
-                    <div class="plugins-empty-state" style="grid-column: 1 / -1;">
-                        <div class="icon">🔍</div>
-                        <h4>No plugins found</h4>
-                        <p>Try searching for a different keyword like "ViaVersion", "LuckPerms", or "Essentials".</p>
-                    </div>
-                `;
-                return;
+            if (!plugins.length) {
+                const empty = document.createElement('div'); empty.className = 'plugins-empty-state'; empty.style.gridColumn = '1 / -1';
+                empty.textContent = 'No compatible plugins found. Try another search or category.';
+                grid.append(empty); window.JtgUI.renderPluginAvailability(grid,res); return;
             }
 
             plugins.forEach(p => {
@@ -2090,7 +2106,8 @@ const initApp = async () => {
                     : `<div class="plugin-card-icon">🧩</div>`;
 
                 const isInstalled = p.isInstalled;
-                const btnLabel = isInstalled ? '✅ Installed' : '📥 Install';
+                const isCompatible = p.compatible === true;
+                const btnLabel = isInstalled ? '✅ Installed' : isCompatible ? '📥 Install' : 'Not available';
                 const btnClass = isInstalled ? 'plugin-btn-install installed' : 'plugin-btn-install ready';
                 const catLabel = (p.categories && p.categories[0]) ? p.categories[0] : 'Plugin';
 
@@ -2110,13 +2127,13 @@ const initApp = async () => {
                         <div class="plugin-card-desc" title="${p.description || ''}">${p.description || 'No description provided.'}</div>
                     </div>
                     <div class="plugin-card-footer">
-                        <span style="font-size: 11px; color: var(--text-3);">${p.isCurated ? '★ Curated' : 'Modrinth'}</span>
-                        <button class="${btnClass}" ${isInstalled ? 'disabled' : ''} data-id="${p.id || p.slug}">${btnLabel}</button>
+                        <span style="font-size: 11px; color: var(--text-3);">${p.compatible ? `MC ${p.serverVersion} · ${p.versionNumber}` : 'Compatibility unverified'}</span>
+                        <button class="${btnClass}" ${isInstalled || !isCompatible ? 'disabled' : ''} data-id="${p.id || p.slug}">${btnLabel}</button>
                     </div>
                 `;
 
                 const btnInstall = card.querySelector('.plugin-btn-install');
-                if (!isInstalled && btnInstall) {
+                if (!isInstalled && isCompatible && btnInstall) {
                     btnInstall.onclick = async () => {
                         await installPluginFromCard(p, btnInstall);
                     };
@@ -2124,7 +2141,9 @@ const initApp = async () => {
 
                 grid.appendChild(card);
             });
+            window.JtgUI.renderPluginAvailability(grid,res);
         } catch (err) {
+            if (generation !== pluginSearchGeneration) return;
             grid.innerHTML = `
                 <div class="plugins-empty-state" style="grid-column: 1 / -1;">
                     <div class="icon">⚠️</div>
@@ -2151,7 +2170,8 @@ const initApp = async () => {
             await window.api.pluginInstall({
                 projectId: p.slug || p.id,
                 downloadUrl: downloadUrl,
-                fileName: fileName
+                fileName: fileName,
+                serverVersion: verInfo.serverVersion
             });
 
             btn.className = 'plugin-btn-install installed';

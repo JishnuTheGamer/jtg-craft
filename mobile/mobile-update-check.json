@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
-  "versionCode": 1010,
+  "version": "1.0.11",
+  "versionCode": 1011,
   "releaseDate": "2026-10-11",
   "channel": "mobile-production",
   "updateMode": "native-aware",
@@ -16,6 +16,22 @@
     "mobile/www/renderer.js"
   ],
   "changelog": [
+    {
+      "version": "1.0.11",
+      "versionCode": 1011,
+      "date": "2026-10-11",
+      "type": "patch",
+      "title": "Plugins matched to your Minecraft server version",
+      "changes": [
+        "Native app upgrade required once for older APKs: use the APK on this release; existing servers are retained when installed over the old app.",
+        "Verified complete web bundles load HTML, JavaScript and CSS after activation; failed downloads keep the installed app.",
+        "Future native upgrades download inside the app and open Android installation confirmation; package, version and signing certificate are checked.",
+        "Plugin installs verify Minecraft version, platform and SHA-512 again in the native downloader.",
+        "Java 25 now includes its required ARM64 C++ library and repairs existing installations.",
+        "Android Java 21/25 use pinned Bionic ARM64 archives with checksums; MC 26.x selects Java 25.",
+        "System Bionic allocator verification, Android 16 JVM compatibility flags, actual device RAM/CPU limits, and Phone Storage permission flow."
+      ]
+    },
     {
       "version": "1.0.10",
       "versionCode": 1010,
@@ -178,21 +194,21 @@
       ]
     }
   ],
-  "sourceRef": "v1.0.6",
-  "requiredNativeCode": 10,
+  "sourceRef": "v1.0.7",
+  "requiredNativeCode": 11,
   "nativeUpdate": {
-    "version": "1.0.10",
-    "versionCode": 10,
+    "version": "1.0.11",
+    "versionCode": 11,
     "url": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/jtg-craft-mobile-v1.apk",
-    "sha256": "249aea9ecf0573424f7420b71aeaade021f733f1a8e3ac531555f8f637e56167",
-    "size": 5771911
+    "sha256": "e55e028c7e1a4ec8b57af78e83aea979d0800d980dc712f042e95328db7d0c57",
+    "size": 5778685
   },
   "downloadUrl": "https://github.com/JishnuTheGamer/jtg-craft/releases/download/jtgcraft_v1/jtg-craft-mobile-v1.apk",
   "sha256": {
     "mobile/www/index.html": "f78ead3d26714cc5db12498d7845b92a601eaa1e91ac0cdc112ecfc41753a4b6",
     "mobile/www/style.css": "cb20be6582ff43d7393881748404d216db55738a9a9e7fca48a9a900e171629d",
-    "mobile/www/mobile-patches.css": "ba2bf3edcbe2e151281ed9da250f973300b4f5ceaf3c5bd29a504d66437f383d",
-    "mobile/www/mobile-bridge.js": "014c19ba2b004b5c6bddce07505116197956a541faec65257c1417f69c7a7430",
-    "mobile/www/renderer.js": "b8304eb56cec737c81bbcbcb70cf0a7a50a0b8b8cf9695f2f1d5e15d0f7838a6"
+    "mobile/www/mobile-patches.css": "7060be596d768cbd7a3bd22e7c03de6a4faaad732bd9117273c8ec652e059aa4",
+    "mobile/www/mobile-bridge.js": "742d85d530e926507ceb8f657ec9b33f43584ff4d78c3b6177e3c38826dcbf92",
+    "mobile/www/renderer.js": "df9d740ff6a169b98cd35dddfed9231f41b539027d749ea627397cb7eee6bfe5"
   }
 }

@@ -27,6 +27,8 @@ if (String(key).startsWith('on')) return cb => { window.__listeners[key] = cb; }
 return async (...args) => {
 window.__calls.push({key,args});
 if (key === 'checkForUpdatesManual') return window.__update || values.checkForUpdatesManual;
+if (key === 'pluginSearch') return {serverVersion:'1.20.4',hits:[{id:'via',slug:'via',title:'ViaVersion',compatible:true,serverVersion:'1.20.4',versionNumber:'compatible-build'}],unavailable:args[0] ? [{title:'Unsupported plugin',status:'unavailable',reason:'No build for Minecraft 1.20.4'}] : []};
+if (key === 'pluginGetVersion') return {downloadUrl:'https://cdn.example/compatible.jar',fileName:'compatible.jar',serverVersion:'1.20.4'};
 if (key === 'applyGithubHotUpdate') return {success:true, version:'1.0.9', versionCode:1009, nativeUpdate:true};
 if (key === 'installNativeUpdate') return {permissionRequired:true};
 if (key === 'serverStart' || key === 'serverStop') {
@@ -106,6 +108,16 @@ async function geometry(page) {
             assert.equal(await page.locator('.log-line').count(), 2000);
             await page.locator('#log-clear').click(); assert.equal(await page.locator('.log-line').count(), 0);
             await page.locator('#btn-stop').click(); assert.equal(await page.locator('#btn-start').isEnabled(), true);
+
+            await clickPanel(page,'plugins',mobile);
+            await page.locator('.plugin-btn-install.ready').first().waitFor();
+            assert((await page.locator('.plugin-compatibility-context').innerText()).includes('Minecraft 1.20.4'));
+            await page.locator('.plugin-btn-install.ready').first().click();
+            assert(await page.evaluate(()=>window.__calls.some(call=>call.key==='pluginInstall'&&call.args[0].serverVersion==='1.20.4')));
+            const search = page.locator('#plugin-search-input');
+            await search.fill('unsupported');
+            await page.locator('.plugin-unavailable').waitFor();
+            assert.equal(await page.locator('.plugin-unavailable button').count(),0);
 
             await clickPanel(page,'props',mobile);
             await page.locator('#property-server-port').waitFor();

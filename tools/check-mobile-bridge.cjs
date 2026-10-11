@@ -17,7 +17,7 @@ const plugins = {
     JavaManager:{setJavaVersion:async()=>calls.push('java-setting'),checkJava25:async()=>({installed:false}),checkJava21:async()=>({installed:false}),installJava:async options=>{calls.push('java-'+options.version);return {success:true};}}
 };
 const window = {Capacitor:{registerPlugin:name=>plugins[name] || {}}};
-vm.runInNewContext(fs.readFileSync('mobile/src/mobile-bridge.js','utf8'),{window,console:{log:()=>{},warn:()=>{}},setTimeout:()=>{},setInterval:()=>{},AbortSignal,fetch:async()=>({ok:fetchOk,status:503,json:async()=>remote})});
+vm.runInNewContext(fs.readFileSync('mobile/src/mobile-bridge.js','utf8'),{window,console:{log:()=>{},warn:()=>{}},setTimeout:()=>{},setInterval:()=>{},AbortSignal,URLSearchParams,fetch:async()=>({ok:fetchOk,status:503,json:async()=>remote})});
 (async()=>{
     const api=window.api;
     assert((await api.fetchPaperVersions()).includes('26.2'));

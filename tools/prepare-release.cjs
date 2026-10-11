@@ -12,7 +12,7 @@ const digest = file => {
     }
     return crypto.createHash('sha256').update(bytes).digest('hex');
 };
-const tag = 'v1.0.6';
+const tag = 'v1.0.7';
 // Keep the public download URLs stable; source files use an immutable code tag.
 const releaseTag = 'jtgcraft_v1';
 const installer = 'Jtg-craft.Setup.1.0.0.exe';
@@ -21,27 +21,27 @@ const update = (file, version, code, files, extras, changes) => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, file)));
     Object.assign(manifest, { version, versionCode: code, releaseDate: '2026-10-11', sourceRef: tag, files, ...extras });
     manifest.sha256 = Object.fromEntries(files.filter(f => f !== file).map(f => [f, digest(f)]));
-    if (manifest.changelog[0]?.version !== version) manifest.changelog.unshift({version, versionCode: code, date:'2026-10-11', type:'patch', title:'Mobile Java 25 startup and desktop server recreation fixes', changes});
+    if (manifest.changelog[0]?.version !== version) manifest.changelog.unshift({version, versionCode: code, date:'2026-10-11', type:'patch', title:'Plugins matched to your Minecraft server version', changes});
     fs.writeFileSync(path.join(root, file), JSON.stringify(manifest, null, 2) + '\n');
     return manifest;
 };
-const desktop = update('update-check.json', '1.0.6', 106,
+const desktop = update('update-check.json', '1.0.7', 107,
     ['lib/java-policy.cjs','lib/update-manager.cjs','lib/zip-runtime.cjs','src/index.html','src/style.css','src/renderer.js','src/splash.html','preload.js','main.js','update-check.json'],
-    {minimumBinaryVersion:'1.0.0', downloadUrl: release + installer, nativeUpdate:{version:'1.0.6',url:release+installer}},
-    ['Server deletion prepares the version list for recreation without restarting the app.', 'Auto Java version labels and creation use the same policy as the backend; manual Java remains available.', 'Settings operations show a progress popup; RAM and CPU limits follow actual device hardware.', 'Verified, staged desktop hot updates with rollback on failure and safe shutdown before relaunch.']);
-const mobile = update('mobile/mobile-update-check.json', '1.0.10', 1010,
+    {minimumBinaryVersion:'1.0.0', downloadUrl: release + installer, nativeUpdate:{version:'1.0.7',url:release+installer}},
+    ['Plugin search and downloads require exact server Minecraft version and Paper-compatible metadata; latest/unfiltered fallbacks removed.', 'Server deletion prepares the version list for recreation without restarting the app.', 'Auto Java version labels and creation use the same policy as the backend; manual Java remains available.', 'Settings operations show a progress popup; RAM and CPU limits follow actual device hardware.', 'Verified, staged desktop hot updates with rollback on failure and safe shutdown before relaunch.']);
+const mobile = update('mobile/mobile-update-check.json', '1.0.11', 1011,
     ['mobile/www/index.html','mobile/www/style.css','mobile/www/mobile-patches.css','mobile/www/mobile-bridge.js','mobile/www/renderer.js'],
-    {updateMode:'native-aware', requiredNativeCode:10, nativeUpdate:{version:'1.0.10',versionCode:10,url:release+'jtg-craft-mobile-v1.apk'}, downloadUrl:release+'jtg-craft-mobile-v1.apk'},
-    ['Native app upgrade required once for older APKs: use the APK on this release; existing servers are retained when installed over the old app.', 'Verified complete web bundles load HTML, JavaScript and CSS after activation; failed downloads keep the installed app.', 'Future native upgrades download inside the app and open Android installation confirmation; package, version and signing certificate are checked.', 'Java 25 now includes its required ARM64 C++ library and repairs existing installations.', 'Android Java 21/25 use pinned Bionic ARM64 archives with checksums; MC 26.x selects Java 25.', 'System Bionic allocator verification, Android 16 JVM compatibility flags, actual device RAM/CPU limits, and Phone Storage permission flow.']);
+    {updateMode:'native-aware', requiredNativeCode:11, nativeUpdate:{version:'1.0.11',versionCode:11,url:release+'jtg-craft-mobile-v1.apk'}, downloadUrl:release+'jtg-craft-mobile-v1.apk'},
+    ['Native app upgrade required once for older APKs: use the APK on this release; existing servers are retained when installed over the old app.', 'Verified complete web bundles load HTML, JavaScript and CSS after activation; failed downloads keep the installed app.', 'Future native upgrades download inside the app and open Android installation confirmation; package, version and signing certificate are checked.', 'Plugin installs verify Minecraft version, platform and SHA-512 again in the native downloader.', 'Java 25 now includes its required ARM64 C++ library and repairs existing installations.', 'Android Java 21/25 use pinned Bionic ARM64 archives with checksums; MC 26.x selects Java 25.', 'System Bionic allocator verification, Android 16 JVM compatibility flags, actual device RAM/CPU limits, and Phone Storage permission flow.']);
 if (process.argv.includes('--artifacts')) {
     for (const suffix of ['', '.blockmap']) {
-        for (const name of ['Jtg-craft Setup 1.0.6.exe', 'Jtg-craft-Setup-1.0.6.exe']) {
+        for (const name of ['Jtg-craft Setup 1.0.7.exe', 'Jtg-craft-Setup-1.0.7.exe']) {
             const from = path.join(root, 'dist', name + suffix);
             if (fs.existsSync(from)) fs.renameSync(from, path.join(root,'dist',installer+suffix));
         }
     }
     const latestPath = path.join(root, 'dist', 'latest.yml');
-    if (fs.existsSync(latestPath)) fs.writeFileSync(latestPath, fs.readFileSync(latestPath,'utf8').replaceAll('Jtg-craft-Setup-1.0.6.exe', installer).replaceAll('Jtg-craft Setup 1.0.6.exe', installer));
+    if (fs.existsSync(latestPath)) fs.writeFileSync(latestPath, fs.readFileSync(latestPath,'utf8').replaceAll('Jtg-craft-Setup-1.0.7.exe', installer).replaceAll('Jtg-craft Setup 1.0.7.exe', installer));
     mobile.nativeUpdate.sha256 = digest('mobile/apk/jtg-craft-mobile-v1.apk');
     mobile.nativeUpdate.size = fs.statSync(path.join(root,'mobile/apk/jtg-craft-mobile-v1.apk')).size;
     fs.writeFileSync(path.join(root,'mobile/mobile-update-check.json'),JSON.stringify(mobile,null,2)+'\n');
@@ -50,4 +50,4 @@ if (process.argv.includes('--artifacts')) {
     fs.writeFileSync(path.join(root,'update-check.json'),JSON.stringify(desktop,null,2)+'\n');
 }
 fs.copyFileSync(path.join(root,'mobile/mobile-update-check.json'),path.join(root,'mobile/www/mobile-update-check.json'));
-console.log('Release manifests prepared for PC 1.0.6 / Android 1.0.10 (stable downloads: ' + releaseTag + ', source: ' + tag + ').');
+console.log('Release manifests prepared for PC 1.0.7 / Android 1.0.11 (stable downloads: ' + releaseTag + ', source: ' + tag + ').');

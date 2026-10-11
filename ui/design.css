@@ -31,6 +31,10 @@
 html, body, #screen-dashboard, .dash-content { background:var(--bg-0) !important; color:var(--text-1) !important; }
 body { line-height:1.5; }
 [hidden] { display:none !important; }
+.plugin-compatibility-context { grid-column:1/-1; color:var(--text-2); font-size:13px; margin:0 0 8px; }
+.plugin-unavailable { opacity:.8; justify-content:center; gap:12px; }
+.plugin-unavailable p { color:var(--text-3); font-size:12px; line-height:1.6; margin:0; }
+.plugin-availability-status { color:var(--text-2); font-size:12px; }
 ::selection { background:var(--accent); color:var(--on-accent); }
 button, input, select, textarea { font:inherit; }
 button, .nav-item { -webkit-tap-highlight-color:transparent; }

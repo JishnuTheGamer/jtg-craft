@@ -1,4 +1,4 @@
-# JTG Craft â€” PC 1.0.6 / Android 1.0.10
+# JTG Craft â€” PC 1.0.7 / Android 1.0.11
 
 Both editions use the shared black/crimson interface with eight saved themes,
 searchable and bounded logs, and grouped server properties. Desktop keeps its
@@ -22,7 +22,7 @@ upgrade**. Their loader applied CSS only: saving HTML/JavaScript in localStorage
 did not execute it, and a web patch cannot replace native Java plugins or the
 pointer-tagging library. Stop the server, then install the new APK over the old app; do not uninstall
 it. The package name and signing certificate match the published original APK,
-and the native versionCode increases to 10.
+and the native versionCode increases to 11.
 
 After this upgrade, Android checks automatically at startup and every 30 minutes.
 Automatic downloads are enabled and can be disabled in Settings. Web updates
@@ -60,11 +60,11 @@ After both builds, copy the APK to `mobile/apk/jtg-craft-mobile-v1.apk` and run
 `node tools/prepare-release.cjs --artifacts` to finalize its hash and normalize
 the PC installer filename to the original `Jtg-craft.Setup.1.0.0.exe` download name.
 
-Source at immutable tag `v1.0.6` supplies the verified web files for both
+Source at immutable tag `v1.0.7` supplies the verified web files for both
 independent platform versions. Replace only the APK and EXE assets in the
 existing `jtgcraft_v1` release, preserving the exact public filenames
 `jtg-craft-mobile-v1.apk` and `Jtg-craft.Setup.1.0.0.exe`. Their contents are
-Android 1.0.10 and PC 1.0.6 respectively; the old filename does not describe the
+Android 1.0.11 and PC 1.0.7 respectively; the old filename does not describe the
 installed version. Keep the original V1 tag and shared download URLs unchanged.
 Verify replaced assets before advancing `main`; new manifests refer to these
 stable V1 URLs. No separate binary release is required.
@@ -95,3 +95,24 @@ Validation: Java 25 ARM64 ELF dependencies and imported C++ symbols are checked
 against the bundled library; native host tests verify missing/corrupt library
 repair and incomplete runtime rejection. Browser regression deletes an existing
 PC server and creates a replacement in the same session.
+
+## Plugins for the selected Minecraft server version
+
+Both catalogs use exact Minecraft version and Paper/Spigot/Bukkit version
+metadata. Browse/category views contain only projects with a verified matching
+JAR. Search also explains projects with no matching build, or with verification
+failures, without offering Install. Client-only and Folia-only builds are excluded.
+Curated/direct latest URLs and unfiltered version fallbacks no longer bypass
+compatibility checks. The shared policy is embedded in existing runtime files
+so desktop hot updates do not need a new allowed module.
+
+Install re-resolves the matching build and checks for server/version changes.
+PC and native Android downloaders verify SHA-512 and size before replacing
+plugin files. Failed downloads keep existing plugins. Android native checks
+require the 1.0.11 APK update. Compatibility is based on author-published
+metadata; installed dependencies, Java and plugin configuration can still
+affect runtime behavior. Manually uploaded JARs remain explicit user choices.
+
+Modrinth API: https://docs.modrinth.com/api/operations/getprojectversions/
+Validation: node tools/check-plugins.cjs, mobile bridge checks, browser tests
+for compatible Install and unavailable search cards, and both platform builds.

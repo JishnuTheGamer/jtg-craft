@@ -14,7 +14,7 @@ git add -- .gitattributes .gitignore README.md RELEASE-NOTES.md lib tools ui mai
 if ($LASTEXITCODE -ne 0) { throw 'Could not stage release sources.' }
 git diff --cached --quiet
 if ($LASTEXITCODE -eq 1) {
-    git commit -m 'fix: mobile Java 25 dependency and desktop server recreation'
+    git commit -m 'fix: verify plugin builds against current Minecraft server version'
     if ($LASTEXITCODE -ne 0) { throw 'Could not commit sources.' }
 }
 $sourceTag = (Get-Content -LiteralPath update-check.json -Raw | ConvertFrom-Json).sourceRef
