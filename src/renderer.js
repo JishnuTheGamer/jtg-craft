@@ -510,6 +510,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     let savedDir = localStorage.getItem('jtg-install-dir') || '';
     let paperVersions = [];
 
+    async function loadCreateVersions() {
+        const select = $('#sel-version');
+        let retry = $('#btn-retry-versions');
+        if (!retry) {
+            retry = document.createElement('button'); retry.id = 'btn-retry-versions';
+            retry.type = 'button'; retry.className = 'btn secondary'; retry.textContent = 'Retry loading versions';
+            retry.onclick = loadCreateVersions; select.after(retry);
+        }
+        retry.hidden = true; select.disabled = true;
+        select.replaceChildren(new Option('Loading versions...', ''));
+        try {
+            if (!paperVersions.length) paperVersions = await window.api.fetchPaperVersions();
+            if (!Array.isArray(paperVersions) || !paperVersions.length) throw new Error('No Paper versions were returned.');
+            select.replaceChildren(...paperVersions.map(version => new Option(`${version} · Auto: Java ${window.JtgJavaPolicy.requiredJava(version)}`, version)));
+        } catch (error) {
+            paperVersions = [];
+            select.replaceChildren(new Option('Could not load versions', ''));
+            retry.hidden = false; toast('Failed to load Paper versions: ' + error.message, 'error');
+        } finally { select.disabled = false; }
+    }
+
     // ── Setup progress listener ─────────────────────────────
     window.api.onSetupProgress(data => {
         window.JtgUI.operationProgress(data.percent,data.status);
@@ -631,19 +652,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ── All done → go to create screen ────────
         $('#setup-overall-label').textContent = 'All set! Proceeding to server creation...';
 
-        setTimeout(() => {
-            // Populate versions in create screen
-            const sel = $('#sel-version');
-            sel.innerHTML = '';
-            paperVersions.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v; opt.textContent = `${v} · Auto: Java ${window.JtgJavaPolicy.requiredJava(v)}`;
-                sel.appendChild(opt);
-            });
-            sel.disabled = false;
-
+        setTimeout(async () => {
             $('#inp-dir').value = savedDir;
             showScreen('screen-create');
+            await loadCreateVersions();
         }, 800);
     }
 
@@ -1515,7 +1527,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
             $('#sidebar-server-name').textContent = 'Server';
             resetCreateScreen();
+            $('#inp-dir').value = savedDir;
             showScreen('screen-create');
+            await loadCreateVersions();
         } catch (e) {
             toast(e.message, 'error');
         }

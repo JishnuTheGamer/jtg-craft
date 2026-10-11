@@ -1,4 +1,4 @@
-# JTG Craft — PC 1.0.5 / Android 1.0.9
+# JTG Craft â€” PC 1.0.6 / Android 1.0.10
 
 Both editions use the shared black/crimson interface with eight saved themes,
 searchable and bounded logs, and grouped server properties. Desktop keeps its
@@ -22,7 +22,7 @@ upgrade**. Their loader applied CSS only: saving HTML/JavaScript in localStorage
 did not execute it, and a web patch cannot replace native Java plugins or the
 pointer-tagging library. Stop the server, then install the new APK over the old app; do not uninstall
 it. The package name and signing certificate match the published original APK,
-and the native versionCode increases to 9.
+and the native versionCode increases to 10.
 
 After this upgrade, Android checks automatically at startup and every 30 minutes.
 Automatic downloads are enabled and can be disabled in Settings. Web updates
@@ -34,10 +34,10 @@ are required; a normal app cannot silently replace its APK.
 
 ## Java runtimes
 
-Auto selects Java 17 for Minecraft 1.17–1.20.4, Java 21 for 1.20.5–1.21.x, and
+Auto selects Java 17 for Minecraft 1.17â€“1.20.4, Java 21 for 1.20.5â€“1.21.x, and
 Java 25 for 26.x. Paper's current recommended version table is available at
 https://docs.papermc.io/paper/getting-started/. Manual Java 17/21/25 selections are preserved; server and plugin compatibility
-is the user’s choice. Auto selects the runtime required for the Minecraft version.
+is the userâ€™s choice. Auto selects the runtime required for the Minecraft version.
 
 Windows obtains exact Temurin runtimes from Adoptium and verifies archive hashes.
 Runtime ZIP extraction uses Node streams and validates entry paths, sizes and CRC,
@@ -60,11 +60,11 @@ After both builds, copy the APK to `mobile/apk/jtg-craft-mobile-v1.apk` and run
 `node tools/prepare-release.cjs --artifacts` to finalize its hash and normalize
 the PC installer filename to the original `Jtg-craft.Setup.1.0.0.exe` download name.
 
-Source at immutable tag `v1.0.5` supplies the verified web files for both
+Source at immutable tag `v1.0.6` supplies the verified web files for both
 independent platform versions. Replace only the APK and EXE assets in the
 existing `jtgcraft_v1` release, preserving the exact public filenames
 `jtg-craft-mobile-v1.apk` and `Jtg-craft.Setup.1.0.0.exe`. Their contents are
-Android 1.0.9 and PC 1.0.5 respectively; the old filename does not describe the
+Android 1.0.10 and PC 1.0.6 respectively; the old filename does not describe the
 installed version. Keep the original V1 tag and shared download URLs unchanged.
 Verify replaced assets before advancing `main`; new manifests refer to these
 stable V1 URLs. No separate binary release is required.
@@ -75,3 +75,23 @@ the server default with a writable-folder permission check and proper legacy
 permission callbacks. Android 16 compatibility uses the system Bionic allocator,
 an allocation probe, MEMTAG_OPTIONS=off, and disabled compressed object/class
 pointers. The reported 134 crash still needs a server retest on the phone.
+
+## Java 25 mobile startup and desktop recreation fixes
+
+The ARM64 Java 25 launcher and HotSpot library require libc++_shared.so; Java 21
+does not have that dependency. Bundle the checksum-verified C++ runtime from
+ZalithLauncher 2.7 and copy it into Java 25's lib directory. Existing complete
+Java 25 installs receive the missing library without downloading the Java
+archives again. Missing/corrupt dependencies or missing JVM/modules files no
+longer count as an installed runtime. Android requires the 1.0.10 APK upgrade
+to receive the bundled native dependency and repair logic. Phone execution
+still requires a device retest.
+
+Desktop server deletion now prepares the creation version selector even when
+the app started with an existing server and skipped first-time setup. Creation
+can proceed without restarting JTG Craft; a failed catalog fetch offers Retry.
+
+Validation: Java 25 ARM64 ELF dependencies and imported C++ symbols are checked
+against the bundled library; native host tests verify missing/corrupt library
+repair and incomplete runtime rejection. Browser regression deletes an existing
+PC server and creates a replacement in the same session.

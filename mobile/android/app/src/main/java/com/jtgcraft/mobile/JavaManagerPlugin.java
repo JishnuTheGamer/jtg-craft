@@ -193,6 +193,14 @@ public class JavaManagerPlugin extends Plugin {
 
     private void checkJavaVersion(PluginCall call, int version) {
         try {
+            if (version >= 21) {
+                File binary = findJavaBinaryInDir(new File(getContext().getFilesDir(), "java" + version));
+                JSObject result = new JSObject();
+                result.put("installed", AndroidRuntimeInstaller.isInstalled(getContext(), version));
+                result.put("version", String.valueOf(version)); result.put("path", binary.getAbsolutePath());
+                call.resolve(result);
+                return;
+            }
             File javaBin = (version == 21) ? getJava21Binary() : getJavaBinary();
             if (javaBin.exists() && (javaBin.canExecute() || javaBin.setExecutable(true, false))) {
                 JSObject ret = new JSObject();
@@ -242,8 +250,7 @@ public class JavaManagerPlugin extends Plugin {
         return AndroidRuntimeInstaller.install(ctx, 21, listener);
     }
     @PluginMethod public void checkJava25(PluginCall call) {
-        File bin = findJavaBinaryInDir(new File(getContext().getFilesDir(), "java25"));
-        JSObject result = new JSObject(); result.put("installed", bin.isFile() && bin.canExecute()); result.put("version", "25"); result.put("path", bin.getAbsolutePath()); call.resolve(result);
+        checkJavaVersion(call, 25);
     }
     @PluginMethod public void installJava25(PluginCall call) {
         new Thread(() -> {

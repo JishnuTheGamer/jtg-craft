@@ -176,6 +176,22 @@ async function geometry(page) {
                 await page.screenshot({path:path.join(output,'mobile-sidebar.png')});
                 await page.locator('#btn-drawer-close').click();
             }
+            if (!mobile) {
+                // Existing installs skip setup; deletion must still populate the creation selector.
+                page.on('dialog', dialog => dialog.accept());
+                await page.locator('#btn-settings-delete').click();
+                await page.locator('#operation-close').click();
+                await page.locator('#screen-create.active').waitFor();
+                assert.deepEqual(await page.locator('#sel-version option').evaluateAll(options => options.map(option => option.value)), ['1.21.1','1.20.4']);
+                assert.equal(await page.locator('#sel-version').isEnabled(),true);
+                assert.equal(await page.locator('#inp-dir').inputValue(),'preview-server');
+                await page.locator('#inp-name').fill('Recreated_Server');
+                await page.locator('#sel-version').selectOption('1.20.4');
+                await page.locator('#btn-create').click();
+                await page.locator('#screen-dashboard.active').waitFor();
+                assert(await page.evaluate(() => window.__calls.some(call => call.key === 'createServer' && call.args[0].version === '1.20.4')));
+                console.log('desktop: delete existing server and recreate without app restart passed');
+            }
             assert.deepEqual(errors,[], `${name} JavaScript errors`);
             console.log(`${name}: themes, persistence, logs, controls, property save/validation and layout checks passed`);
             await context.close();

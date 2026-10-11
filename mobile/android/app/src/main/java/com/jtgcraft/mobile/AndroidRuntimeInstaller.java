@@ -2,15 +2,63 @@ package com.jtgcraft.mobile;
 import android.content.Context;
 import java.io.*;
 import java.net.*;
+import java.util.Properties;
 
 /** Pinned Android/Bionic ARM64 runtimes; desktop Linux distributions cannot run here. */
 final class AndroidRuntimeInstaller {
+    private static final String CPP_ASSET = "runtime/arm64-v8a/libc++_shared.so";
+    private static final String CPP_SHA256 = "28e7a3a306d7fc222c62abe08741cfcba38c3f336216c4563726bf985ae3cfd6";
     private static final String SOURCE = "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher2/06bf273371a61ff5398efa9ed10c0adfc4cd075c/ZalithLauncher/src/main/assets/runtimes/jre-";
+    static boolean isInstalled(Context context, int version) {
+        File installed = new File(context.getFilesDir(), "java" + version);
+        try {
+            File binary = JavaManagerPlugin.findJavaBinaryInDir(installed);
+            File home = binary.getParentFile().getParentFile();
+            validateRuntime(home, version);
+            return new File(installed, ".jtg-complete").isFile()
+                && (version != 25 || AppUpdaterPlugin.hash(new File(home, "lib/libc++_shared.so")).equals(CPP_SHA256));
+        } catch (Exception error) { return false; }
+    }
+    private static void validateRuntime(File home, int version) throws IOException {
+        for (String name : new String[]{"bin/java", "lib/modules", "lib/server/libjvm.so", "lib/libjli.so", "release"}) {
+            File file = new File(home, name);
+            if (!file.isFile() || file.length() == 0) throw new IOException("Incomplete Java " + version + ": missing " + name);
+        }
+        if (!new File(home, "bin/java").canExecute()) throw new IOException("Java executable permission is missing.");
+        Properties release = new Properties();
+        try (InputStream input = new FileInputStream(new File(home, "release"))) { release.load(input); }
+        String value = release.getProperty("JAVA_VERSION", "").replace("\"", "");
+        if (!value.matches(version + "(?:[.].*|[-+].*|$)")) throw new IOException("Extracted Java has the wrong version: " + value);
+    }
+    private static void ensureCppRuntime(Context context, File home, int version) throws Exception {
+        if (version != 25) return;
+        File target = new File(home, "lib/libc++_shared.so");
+        if (target.isFile() && AppUpdaterPlugin.hash(target).equals(CPP_SHA256)) return;
+        File pending = new File(home, "lib/.libc++_shared.so.part");
+        try {
+            try (InputStream input = context.getAssets().open(CPP_ASSET); OutputStream output = new FileOutputStream(pending)) {
+                byte[] bytes = new byte[32768]; int count;
+                while ((count = input.read(bytes)) != -1) output.write(bytes, 0, count);
+            }
+            if (!AppUpdaterPlugin.hash(pending).equals(CPP_SHA256)) throw new IOException("Bundled Java 25 C++ library checksum mismatch.");
+            if (!pending.setReadable(true, false) || !pending.setExecutable(true, false)) throw new IOException("Cannot set Java 25 C++ library permissions.");
+            android.system.Os.rename(pending.getAbsolutePath(), target.getAbsolutePath());
+        } finally { pending.delete(); }
+    }
     static synchronized boolean install(Context context, int version, JavaManagerPlugin.JavaProgressListener listener) throws Exception {
         if (version != 21 && version != 25) throw new IOException("Unsupported Java runtime: " + version);
         File installed = new File(context.getFilesDir(), "java" + version);
         File binary = JavaManagerPlugin.findJavaBinaryInDir(installed);
-        if (new File(installed, ".jtg-complete").isFile() && binary.exists() && binary.canExecute()) return true;
+        if (new File(installed, ".jtg-complete").isFile()) {
+            try {
+                File home = binary.getParentFile().getParentFile();
+                validateRuntime(home, version);
+                ensureCppRuntime(context, home, version);
+                return true;
+            } catch (IOException error) {
+                // An incomplete runtime is repaired through the verified staged install below.
+            }
+        }
         String[] files = { "bin-arm64.tar.xz", "universal.tar.xz" };
         String[] hashes = version == 21 ? new String[] { "9889de6d0526e0c9708ea18c6e7e41a7c3d5ae366a02524ae3a392274d3462b5", "57bd118b3696d572257c5f4be1762379eb6a81361a17da1c4b0b9f7131dd6d7c" }
             : new String[] { "16f09d1d163c008ae556be68c624057c4791c21ae6d31302334e61d75439567b", "23141bf4e0ed46ff0b751c6cc32b3863d39e6a37b720f3d86a4fe9318aeb8e9f" };
@@ -49,12 +97,9 @@ final class AndroidRuntimeInstaller {
             }
             JavaManagerPlugin.setExecutableRecursive(stage);
             File stagedJava = JavaManagerPlugin.findJavaBinaryInDir(stage);
-            File release = new File(stagedJava.getParentFile().getParentFile(), "release");
-            String text;
-            try (InputStream input = new FileInputStream(release); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-                byte[] bytes = new byte[4096]; int count; while ((count = input.read(bytes)) != -1) output.write(bytes, 0, count); text = output.toString("UTF-8");
-            }
-            if (!text.contains("JAVA_VERSION=\"" + version + ".") || !stagedJava.isFile() || !stagedJava.canExecute()) throw new IOException("Extracted Java has the wrong version.");
+            File stagedHome = stagedJava.getParentFile().getParentFile();
+            validateRuntime(stagedHome, version);
+            ensureCppRuntime(context, stagedHome, version);
             try (FileWriter writer = new FileWriter(new File(stage, ".jtg-complete"))) { writer.write(String.valueOf(version)); }
             if (backup.exists()) JavaManagerPlugin.deleteRecursive(backup);
             if (installed.exists() && !installed.renameTo(backup)) throw new IOException("Cannot preserve installed Java.");

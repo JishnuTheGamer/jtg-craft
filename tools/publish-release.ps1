@@ -14,7 +14,7 @@ git add -- .gitattributes .gitignore README.md RELEASE-NOTES.md lib tools ui mai
 if ($LASTEXITCODE -ne 0) { throw 'Could not stage release sources.' }
 git diff --cached --quiet
 if ($LASTEXITCODE -eq 1) {
-    git commit -m 'fix: Java selection, Android hosting, resources and settings progress'
+    git commit -m 'fix: mobile Java 25 dependency and desktop server recreation'
     if ($LASTEXITCODE -ne 0) { throw 'Could not commit sources.' }
 }
 $sourceTag = (Get-Content -LiteralPath update-check.json -Raw | ConvertFrom-Json).sourceRef

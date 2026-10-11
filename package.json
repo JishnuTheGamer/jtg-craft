@@ -1,7 +1,7 @@
 {
   "name": "jtg-craft",
-  "version": "1.0.5",
-  "description": "Jtg-craft — Automated Minecraft Paper Server Manager",
+  "version": "1.0.6",
+  "description": "Jtg-craft \u00e2\u20ac\u201d Automated Minecraft Paper Server Manager",
   "main": "main.js",
   "scripts": {
     "prestart": "node tools/sync-ui.cjs",

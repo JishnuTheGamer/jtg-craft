@@ -21,7 +21,7 @@ import java.util.*;
 /** Web updates and APK updates are separate: an OTA web bundle cannot replace Java plugins. */
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
-    static final int BUNDLED_WEB_CODE = 1009;
+    static final int BUNDLED_WEB_CODE = 1010;
     private static final String MANIFEST = "https://raw.githubusercontent.com/JishnuTheGamer/jtg-craft/main/mobile/mobile-update-check.json";
     private static final Set<String> WEB_FILES = new HashSet<>(Arrays.asList("index.html", "style.css", "mobile-patches.css", "mobile-bridge.js", "renderer.js"));
     private SharedPreferences prefs() { return getContext().getSharedPreferences("jtg_updates", Context.MODE_PRIVATE); }
